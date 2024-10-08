@@ -40,7 +40,7 @@ const buttons: NavbarButtons[] = [
   },
   {
     text: "Sign Up",
-    link: "#signup",
+    link: "signup",
     type: "primary",
   },
 ];

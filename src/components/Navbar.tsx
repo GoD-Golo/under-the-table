@@ -40,14 +40,6 @@ export default function Navbar(buttonsList: NavbarButtonsList) {
               )
             )}
           </ul>
-          {/* //{" "}
-          <a href="#signup">
-            //{" "}
-            <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-100 font-semibold rounded-lg">
-              // Sign Up //{" "}
-            </button>
-            //{" "}
-          </a> */}
         </div>
       </div>
     </nav>
