@@ -1,11 +1,11 @@
 # Architecture
 
-Status: **foundation + Vertical Slice 003.5 table UX stabilization**
+Status: **foundation + Vertical Slice 003.6 unified Play surface**
 
 ## Boundary model
 
 ```text
-React UI / freeform DOM workspaces + Scene Atlas
+React UI / Director + unified Play surfaces + Scene Atlas
         |                \
         | live intents    \ durable world edits / assets
         v                  v
@@ -36,6 +36,8 @@ The room contains the VS001 character/roll/HP state, `activeSceneId`, and a sync
 
 Director browsing is intentionally **not** authoritative. A client can pan, zoom, select hotspots and browse another scene without moving the table. Clients that follow the table react to `activeSceneId`; if that scene was created after their Atlas snapshot, they refresh durable Atlas data before navigating.
 
+Play is a projection over session state. Virtual Table resolves `activeSceneId` to the durable scene record and renders scene + active token projection underneath a local freeform HUD. Companion renders the same session widgets without a map. Campaign Companion sends intents to Colyseus; Offline Companion instead mutates browser-local HP/dice/log state and never auto-merges it back into campaign state.
+
 ## Current durable world model
 
 VS002/VS003 currently use four small `SCHEMAFULL` world tables:
@@ -55,7 +57,7 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
 
-**Presentation state:** pan/zoom, current private browse scene, selected hotspot, freeform widget placements/z-order and optional snap-grid layout. These are not game truth. Live and Director use the same role-neutral freeform primitive with different widget content.
+**Presentation/local-only state:** pan/zoom, Play/Companion mode, current private browse scene, selected hotspot, freeform widget placements/z-order, optional snap-grid layout, and explicit Offline Companion HP/dice/log state. These are not authoritative campaign truth. Play and Director use the same role-neutral freeform primitive with different widget content.
 
 ## Not implemented yet
 

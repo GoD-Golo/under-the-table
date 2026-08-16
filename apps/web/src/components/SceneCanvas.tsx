@@ -10,15 +10,16 @@ interface SceneCanvasProps {
   clientName: string;
   selectedHotspotId: string | null;
   selectedHotspotLore: string | null;
-  selectedHotspotLinkedSceneName: string | null;
-  addPinMode: boolean;
-  addTokenMode: boolean;
-  onToggleAddPin: () => void;
-  onToggleAddToken: () => void;
-  onCanvasPoint: (point: { x: number; y: number }) => void;
-  onTokenPoint: (point: { x: number; y: number }) => void;
-  onHotspotSelect: (hotspot: AtlasHotspotDto) => void;
-  onHotspotEnter: (hotspot: AtlasHotspotDto) => void;
+  selectedHotspotLinkedSceneName?: string | null;
+  mode?: "director" | "play";
+  addPinMode?: boolean;
+  addTokenMode?: boolean;
+  onToggleAddPin?: () => void;
+  onToggleAddToken?: () => void;
+  onCanvasPoint?: (point: { x: number; y: number }) => void;
+  onTokenPoint?: (point: { x: number; y: number }) => void;
+  onHotspotSelect?: (hotspot: AtlasHotspotDto) => void;
+  onHotspotEnter?: (hotspot: AtlasHotspotDto) => void;
   onTokenMove: (tokenId: string, x: number, y: number) => void;
 }
 
@@ -52,7 +53,7 @@ function GridOverlay({ scene }: { scene: AtlasSceneDto }) {
 
 export function SceneCanvas({
   scene, hotspots, tokens, clientName, selectedHotspotId, selectedHotspotLore, selectedHotspotLinkedSceneName,
-  addPinMode, addTokenMode, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove
+  mode = "director", addPinMode = false, addTokenMode = false, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove
 }: SceneCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; cameraX: number; cameraY: number } | null>(null);
@@ -99,15 +100,15 @@ export function SceneCanvas({
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    if (addPinMode || addTokenMode) {
+    if (mode === "director" && (addPinMode || addTokenMode)) {
       const worldX = (event.clientX - rect.left - camera.x) / camera.scale;
       const worldY = (event.clientY - rect.top - camera.y) / camera.scale;
       const point = {
         x: clamp(worldX / scene.backgroundWidth, 0, 1),
         y: clamp(worldY / scene.backgroundHeight, 0, 1)
       };
-      if (addTokenMode) onTokenPoint(point);
-      else onCanvasPoint(point);
+      if (addTokenMode) onTokenPoint?.(point);
+      else onCanvasPoint?.(point);
       return;
     }
     dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, cameraX: camera.x, cameraY: camera.y };
@@ -168,12 +169,14 @@ export function SceneCanvas({
   };
 
   return (
-    <section className={`scene-viewport ${addPinMode ? "placing-pin" : ""} ${addTokenMode ? "placing-token" : ""}`} ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
+    <section className={`scene-viewport ${mode === "play" ? "play-scene" : ""} ${addPinMode ? "placing-pin" : ""} ${addTokenMode ? "placing-token" : ""}`} ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
       <div className="scene-toolbar" onPointerDown={(event) => event.stopPropagation()}>
         <button type="button" className="map-tool" onClick={fit}>Fit</button>
         <span>{Math.round(camera.scale * 100)}%</span>
-        <button type="button" className={`map-tool ${addPinMode ? "active" : ""}`} onClick={onToggleAddPin}>{addPinMode ? "Cancel pin" : "+ Pin"}</button>
-        <button type="button" className={`map-tool ${addTokenMode ? "active" : ""}`} onClick={onToggleAddToken}>{addTokenMode ? "Cancel token" : "+ Token"}</button>
+        {mode === "director" ? <>
+          <button type="button" className={`map-tool ${addPinMode ? "active" : ""}`} onClick={onToggleAddPin}>{addPinMode ? "Cancel pin" : "+ Pin"}</button>
+          <button type="button" className={`map-tool ${addTokenMode ? "active" : ""}`} onClick={onToggleAddToken}>{addTokenMode ? "Cancel token" : "+ Token"}</button>
+        </> : null}
       </div>
       {addPinMode ? <div className="placement-hint">Click anywhere on the scene to place a hotspot</div> : null}
       {addTokenMode ? <div className="placement-hint">Click anywhere on the scene to place a token</div> : null}
@@ -216,8 +219,8 @@ export function SceneCanvas({
                   type="button"
                   className={`scene-hotspot ${selected ? "selected" : ""}`}
                   aria-label={`Open ${hotspot.label} hotspot`}
-                  onClick={(event) => { event.stopPropagation(); onHotspotSelect(hotspot); }}
-                  onDoubleClick={(event) => { event.stopPropagation(); if (hotspot.linkedSceneId) onHotspotEnter(hotspot); }}
+                  onClick={(event) => { event.stopPropagation(); onHotspotSelect?.(hotspot); }}
+                  onDoubleClick={(event) => { event.stopPropagation(); if (hotspot.linkedSceneId) onHotspotEnter?.(hotspot); }}
                 >
                   <span className="hotspot-dot"><i>◆</i></span><span className="hotspot-label">{hotspot.label}</span>
                 </button>
@@ -225,7 +228,7 @@ export function SceneCanvas({
                   <div className="hotspot-popover">
                     <strong>{hotspot.label}</strong>
                     <p>{selectedHotspotLore || "No lore summary attached yet."}</p>
-                    {hotspot.linkedSceneId ? <button type="button" className="game-button primary" onClick={() => onHotspotEnter(hotspot)}>Open {selectedHotspotLinkedSceneName || "linked scene"}</button> : null}
+                    {hotspot.linkedSceneId && onHotspotEnter ? <button type="button" className="game-button primary" onClick={() => onHotspotEnter(hotspot)}>Open {selectedHotspotLinkedSceneName || "linked scene"}</button> : null}
                   </div>
                 ) : null}
               </div>
