@@ -9,6 +9,8 @@ interface SceneCanvasProps {
   tokens: AtlasTokenDto[];
   clientName: string;
   selectedHotspotId: string | null;
+  selectedHotspotLore: string | null;
+  selectedHotspotLinkedSceneName: string | null;
   addPinMode: boolean;
   addTokenMode: boolean;
   onToggleAddPin: () => void;
@@ -16,6 +18,7 @@ interface SceneCanvasProps {
   onCanvasPoint: (point: { x: number; y: number }) => void;
   onTokenPoint: (point: { x: number; y: number }) => void;
   onHotspotSelect: (hotspot: AtlasHotspotDto) => void;
+  onHotspotEnter: (hotspot: AtlasHotspotDto) => void;
   onTokenMove: (tokenId: string, x: number, y: number) => void;
 }
 
@@ -48,13 +51,13 @@ function GridOverlay({ scene }: { scene: AtlasSceneDto }) {
 }
 
 export function SceneCanvas({
-  scene, hotspots, tokens, clientName, selectedHotspotId, addPinMode, addTokenMode, onToggleAddPin, onToggleAddToken,
-  onCanvasPoint, onTokenPoint, onHotspotSelect, onTokenMove
+  scene, hotspots, tokens, clientName, selectedHotspotId, selectedHotspotLore, selectedHotspotLinkedSceneName,
+  addPinMode, addTokenMode, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove
 }: SceneCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; cameraX: number; cameraY: number } | null>(null);
   const tokenDragRef = useRef<{ pointerId: number; tokenId: string; clientX: number; clientY: number; x: number; y: number } | null>(null);
-  const [draggedToken, setDraggedToken] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [draggedToken, setDraggedToken] = useState<{ id: string; x: number; y: number; pending: boolean } | null>(null);
   const [camera, setCamera] = useState<CameraState>({ x: 0, y: 0, scale: 0.5 });
 
   const fit = useCallback(() => {
@@ -121,6 +124,20 @@ export function SceneCanvas({
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
   };
 
+  useEffect(() => {
+    if (!draggedToken?.pending) return;
+    const authoritative = tokens.find((token) => token.id === draggedToken.id);
+    if (!authoritative) return;
+    const converged = Math.abs(authoritative.x - draggedToken.x) < 0.0005 && Math.abs(authoritative.y - draggedToken.y) < 0.0005;
+    if (converged) setDraggedToken(null);
+  }, [draggedToken, tokens]);
+
+  useEffect(() => {
+    if (!draggedToken?.pending) return;
+    const timer = window.setTimeout(() => setDraggedToken((current) => current?.id === draggedToken.id && current.pending ? null : current), 1600);
+    return () => window.clearTimeout(timer);
+  }, [draggedToken]);
+
   const canControlToken = (token: AtlasTokenDto) => !token.controllerName || token.controllerName === clientName;
 
   const startTokenDrag = (event: ReactPointerEvent<HTMLButtonElement>, token: AtlasTokenDto) => {
@@ -128,7 +145,7 @@ export function SceneCanvas({
     if (event.button !== 0 || !canControlToken(token)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     tokenDragRef.current = { pointerId: event.pointerId, tokenId: token.id, clientX: event.clientX, clientY: event.clientY, x: token.x, y: token.y };
-    setDraggedToken({ id: token.id, x: token.x, y: token.y });
+    setDraggedToken({ id: token.id, x: token.x, y: token.y, pending: false });
   };
 
   const moveTokenDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -137,16 +154,16 @@ export function SceneCanvas({
     event.stopPropagation();
     const x = clamp(drag.x + (event.clientX - drag.clientX) / (camera.scale * scene.backgroundWidth), 0, 1);
     const y = clamp(drag.y + (event.clientY - drag.clientY) / (camera.scale * scene.backgroundHeight), 0, 1);
-    setDraggedToken({ id: drag.tokenId, x, y });
+    setDraggedToken({ id: drag.tokenId, x, y, pending: false });
   };
 
   const finishTokenDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const drag = tokenDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.stopPropagation();
-    const finalPosition = draggedToken?.id === drag.tokenId ? draggedToken : { id: drag.tokenId, x: drag.x, y: drag.y };
+    const finalPosition = draggedToken?.id === drag.tokenId ? draggedToken : { id: drag.tokenId, x: drag.x, y: drag.y, pending: false };
     tokenDragRef.current = null;
-    setDraggedToken(null);
+    setDraggedToken({ id: drag.tokenId, x: finalPosition.x, y: finalPosition.y, pending: true });
     onTokenMove(drag.tokenId, finalPosition.x, finalPosition.y);
   };
 
@@ -186,18 +203,34 @@ export function SceneCanvas({
           })}
         </div>
         <div className="hotspot-layer">
-          {hotspots.map((hotspot) => (
-            <button
-              type="button"
-              key={hotspot.id}
-              className={`scene-hotspot ${selectedHotspotId === hotspot.id ? "selected" : ""}`}
-              style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%`, transform: `translate(-50%, -100%) scale(${1 / camera.scale})` }}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => { event.stopPropagation(); onHotspotSelect(hotspot); }}
-            >
-              <span className="hotspot-dot">◆</span><span className="hotspot-label">{hotspot.label}</span>
-            </button>
-          ))}
+          {hotspots.map((hotspot) => {
+            const selected = selectedHotspotId === hotspot.id;
+            return (
+              <div
+                key={hotspot.id}
+                className={`scene-hotspot-anchor ${selected ? "selected" : ""}`}
+                style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%`, transform: `translate(-50%, -100%) scale(${1 / camera.scale})` }}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className={`scene-hotspot ${selected ? "selected" : ""}`}
+                  aria-label={`Open ${hotspot.label} hotspot`}
+                  onClick={(event) => { event.stopPropagation(); onHotspotSelect(hotspot); }}
+                  onDoubleClick={(event) => { event.stopPropagation(); if (hotspot.linkedSceneId) onHotspotEnter(hotspot); }}
+                >
+                  <span className="hotspot-dot"><i>◆</i></span><span className="hotspot-label">{hotspot.label}</span>
+                </button>
+                {selected ? (
+                  <div className="hotspot-popover">
+                    <strong>{hotspot.label}</strong>
+                    <p>{selectedHotspotLore || "No lore summary attached yet."}</p>
+                    {hotspot.linkedSceneId ? <button type="button" className="game-button primary" onClick={() => onHotspotEnter(hotspot)}>Open {selectedHotspotLinkedSceneName || "linked scene"}</button> : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

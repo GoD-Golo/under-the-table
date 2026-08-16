@@ -15,7 +15,7 @@ export function App() {
           <span className="brand-mark">UTT</span>
           <div>
             <strong>Under The Table</strong>
-            <span>Vertical Slice 003 · Tokens</span>
+            <span>Vertical Slice 003.5 · Table UX</span>
           </div>
         </div>
 
@@ -29,8 +29,8 @@ export function App() {
 
         <div className="topbar-actions">
           <div className="view-switch" aria-label="Workspace view">
-            <button className={view === "atlas" ? "active" : ""} type="button" onClick={() => setView("atlas")}>Atlas</button>
-            <button className={view === "hud" ? "active" : ""} type="button" onClick={() => setView("hud")}>Table HUD</button>
+            <button className={view === "atlas" ? "active" : ""} type="button" onClick={() => setView("atlas")}>Director</button>
+            <button className={view === "hud" ? "active" : ""} type="button" onClick={() => setView("hud")}>Live</button>
           </div>
           <span className="environment-badge">TAILSCALE DEV</span>
           {view === "hud" ? <button className="ghost-button" type="button" onClick={() => setLayoutResetToken((value) => value + 1)}>Reset HUD</button> : null}
@@ -68,8 +68,8 @@ export function App() {
       )}
 
       <footer className="footer-note">
-        <span>{view === "atlas" ? "Scene Atlas foundation" : "Live HUD foundation"}</span>
-        <span>{view === "atlas" ? "Pan · zoom · link · present" : "Drag from widget headers · Resize from edges"}</span>
+        <span>{view === "atlas" ? "Director workspace" : "Live workspace"}</span>
+        <span>{view === "atlas" ? "Browse privately · present · floating DM tools" : "Freeform or snap-grid widgets · overlap allowed"}</span>
       </footer>
     </div>
   );

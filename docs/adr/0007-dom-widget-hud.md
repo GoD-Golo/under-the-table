@@ -1,6 +1,6 @@
 # ADR 0007 — DOM-based configurable HUD
 
-Status: Accepted
+Status: Accepted, amended by ADR 0014
 
 ## Context
 
@@ -9,6 +9,8 @@ UTT live UI is text/control dense and must remain accessible, draggable, resizab
 ## Decision
 
 Render HUD widgets in React DOM and use React-Grid-Layout v2 for the first layout primitive. Keep presentation layout outside authoritative game state.
+
+ADR 0014 later keeps the DOM decision but changes layout policy: freeform placement is primary and React Grid Layout is an optional Snap Grid mode.
 
 ## Alternatives considered
 

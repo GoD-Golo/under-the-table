@@ -1,11 +1,11 @@
 # Architecture
 
-Status: **foundation + Vertical Slice 003 authoritative tokens**
+Status: **foundation + Vertical Slice 003.5 table UX stabilization**
 
 ## Boundary model
 
 ```text
-React UI / DOM HUD + Scene Atlas
+React UI / freeform DOM workspaces + Scene Atlas
         |                \
         | live intents    \ durable world edits / assets
         v                  v
@@ -55,7 +55,7 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
 
-**Presentation state:** pan/zoom, current private browse scene, selected hotspot and HUD layout. These are not game truth.
+**Presentation state:** pan/zoom, current private browse scene, selected hotspot, freeform widget placements/z-order and optional snap-grid layout. These are not game truth. Live and Director use the same role-neutral freeform primitive with different widget content.
 
 ## Not implemented yet
 

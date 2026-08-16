@@ -30,6 +30,14 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - token persistence/recovery through SurrealDB;
 - provisional claimed-player ownership semantics without pretending client names are authentication.
 
+**Vertical Slice 003.5** stabilizes the table UX before vision/combat work:
+
+- freeform Live widgets with overlap, free resize and z-order;
+- optional Snap Grid mode instead of mandatory compaction;
+- the same freeform primitive for floating Director tools;
+- optimistic token movement held until authoritative confirmation, removing accepted-move rubber-band;
+- contextual map popovers for scene/lore hotspots.
+
 Walls/doors, fog/vision, initiative/targeting, travel rules, hex-map generation, auth/roles, secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
 
 ## Development architecture
@@ -48,6 +56,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-001.md` — live-runtime foundation evidence
 - `docs/VERTICAL-SLICE-002.md` — Scene Atlas foundation evidence
 - `docs/VERTICAL-SLICE-003.md` — authoritative token foundation evidence
+- `docs/VERTICAL-SLICE-003-5.md` — freeform workspace and interaction stabilization evidence
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands
