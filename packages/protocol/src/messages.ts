@@ -6,7 +6,9 @@ export const MESSAGE = {
   adjustHp: "adjust_hp",
   presentScene: "present_scene",
   createToken: "create_token",
-  moveToken: "move_token"
+  moveToken: "move_token",
+  setFogEnabled: "set_fog_enabled",
+  setFogCell: "set_fog_cell"
 } as const;
 
 export interface JoinOptions { clientName?: string }
@@ -24,6 +26,8 @@ export interface CreateTokenCommand {
 }
 
 export interface MoveTokenCommand { tokenId: string; x: number; y: number }
+export interface SetFogEnabledCommand { sceneId: string; enabled: boolean }
+export interface SetFogCellCommand { sceneId: string; column: number; row: number; revealed: boolean }
 
 export const SERVER_MESSAGE = { commandError: "command_error" } as const;
 export interface CommandErrorMessage { message: string }

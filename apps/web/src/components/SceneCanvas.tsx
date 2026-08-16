@@ -21,10 +21,43 @@ interface SceneCanvasProps {
   onHotspotSelect?: (hotspot: AtlasHotspotDto) => void;
   onHotspotEnter?: (hotspot: AtlasHotspotDto) => void;
   onTokenMove: (tokenId: string, x: number, y: number) => void;
+  fogEnabled?: boolean;
+  fogRevealedCells?: string[];
+  fogRevealMode?: boolean;
+  onFogCell?: (column: number, row: number, revealed: boolean) => void;
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+const FOG_COLUMNS = 12;
+const FOG_ROWS = 8;
+
+function FogOverlay({ enabled, revealedCells, mode, revealMode, onCell }: {
+  enabled: boolean; revealedCells: string[]; mode: "director" | "play"; revealMode: boolean;
+  onCell: ((column: number, row: number, revealed: boolean) => void) | undefined;
+}) {
+  if (!enabled) return null;
+  const revealed = new Set(revealedCells);
+  const cells = Array.from({ length: FOG_COLUMNS * FOG_ROWS }, (_, index) => {
+    const column = index % FOG_COLUMNS;
+    const row = Math.floor(index / FOG_COLUMNS);
+    const key = `${column}:${row}`;
+    const isRevealed = revealed.has(key);
+    return (
+      <button
+        type="button" key={key}
+        className={`fog-cell ${isRevealed ? "revealed" : "covered"}`}
+        style={{ left: `${column / FOG_COLUMNS * 100}%`, top: `${row / FOG_ROWS * 100}%`, width: `${100 / FOG_COLUMNS}%`, height: `${100 / FOG_ROWS}%` }}
+        tabIndex={mode === "director" && revealMode ? 0 : -1}
+        aria-label={`${isRevealed ? "Cover" : "Reveal"} fog cell ${column + 1}, ${row + 1}`}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => { event.stopPropagation(); if (mode === "director" && revealMode) onCell?.(column, row, !isRevealed); }}
+      />
+    );
+  });
+  return <div className={`fog-layer ${mode} ${revealMode ? "editing" : ""}`} aria-hidden={mode === "play"}>{cells}</div>;
 }
 
 function GridOverlay({ scene }: { scene: AtlasSceneDto }) {
@@ -53,7 +86,8 @@ function GridOverlay({ scene }: { scene: AtlasSceneDto }) {
 
 export function SceneCanvas({
   scene, hotspots, tokens, clientName, selectedHotspotId, selectedHotspotLore, selectedHotspotLinkedSceneName,
-  mode = "director", addPinMode = false, addTokenMode = false, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove
+  mode = "director", addPinMode = false, addTokenMode = false, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove,
+  fogEnabled = false, fogRevealedCells = [], fogRevealMode = false, onFogCell
 }: SceneCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; cameraX: number; cameraY: number } | null>(null);
@@ -140,6 +174,13 @@ export function SceneCanvas({
   }, [draggedToken]);
 
   const canControlToken = (token: AtlasTokenDto) => !token.controllerName || token.controllerName === clientName;
+  const revealedFogCells = new Set(fogRevealedCells);
+  const tokenVisibleThroughFog = (token: AtlasTokenDto) => {
+    if (mode !== "play" || !fogEnabled) return true;
+    const column = Math.min(FOG_COLUMNS - 1, Math.floor(token.x * FOG_COLUMNS));
+    const row = Math.min(FOG_ROWS - 1, Math.floor(token.y * FOG_ROWS));
+    return revealedFogCells.has(`${column}:${row}`);
+  };
 
   const startTokenDrag = (event: ReactPointerEvent<HTMLButtonElement>, token: AtlasTokenDto) => {
     event.stopPropagation();
@@ -169,7 +210,7 @@ export function SceneCanvas({
   };
 
   return (
-    <section className={`scene-viewport ${mode === "play" ? "play-scene" : ""} ${addPinMode ? "placing-pin" : ""} ${addTokenMode ? "placing-token" : ""}`} ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
+    <section className={`scene-viewport ${mode === "play" ? "play-scene" : ""} ${addPinMode ? "placing-pin" : ""} ${addTokenMode ? "placing-token" : ""} ${fogRevealMode ? "revealing-fog" : ""}`} ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
       <div className="scene-toolbar" onPointerDown={(event) => event.stopPropagation()}>
         <button type="button" className="map-tool" onClick={fit}>Fit</button>
         <span>{Math.round(camera.scale * 100)}%</span>
@@ -180,11 +221,13 @@ export function SceneCanvas({
       </div>
       {addPinMode ? <div className="placement-hint">Click anywhere on the scene to place a hotspot</div> : null}
       {addTokenMode ? <div className="placement-hint">Click anywhere on the scene to place a token</div> : null}
+      {fogRevealMode ? <div className="placement-hint">Click fog tiles to reveal or cover them</div> : null}
       <div className="scene-surface" style={{ width: scene.backgroundWidth, height: scene.backgroundHeight, transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})` }}>
         {scene.backgroundAssetKey ? <img className="scene-background" src={`/game/assets/${scene.backgroundAssetKey}`} alt="" draggable={false} /> : <div className="blank-scene-art"><span>UTT</span><p>{scene.name}</p></div>}
         <GridOverlay scene={scene} />
         <div className="token-layer">
           {tokens.map((token) => {
+            if (!tokenVisibleThroughFog(token)) return null;
             const position = draggedToken?.id === token.id ? draggedToken : token;
             const controlled = canControlToken(token);
             const size = scene.grid.visible && scene.grid.kind !== "none" ? scene.grid.size * 0.78 : 56;
@@ -235,6 +278,7 @@ export function SceneCanvas({
             );
           })}
         </div>
+        <FogOverlay enabled={fogEnabled} revealedCells={fogRevealedCells} mode={mode} revealMode={fogRevealMode} onCell={onFogCell} />
       </div>
     </section>
   );

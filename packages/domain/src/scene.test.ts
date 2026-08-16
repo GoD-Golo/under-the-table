@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGrid, normalizeHotspotCoordinate, normalizeLoreSummary, normalizeSceneKind, normalizeSceneName } from "./scene.js";
+import { normalizeFogCell, normalizeGrid, normalizeHotspotCoordinate, normalizeLoreSummary, normalizeSceneKind, normalizeSceneName } from "./scene.js";
 
 describe("scene primitives", () => {
   it("normalizes compact scene names", () => {
@@ -19,6 +19,12 @@ describe("scene primitives", () => {
   it("keeps hotspot positions normalized", () => {
     expect(normalizeHotspotCoordinate(0.375)).toBe(0.375);
     expect(() => normalizeHotspotCoordinate(1.1)).toThrow();
+  });
+
+  it("normalizes fixed placeholder fog cells", () => {
+    expect(normalizeFogCell(3, 5)).toBe("3:5");
+    expect(() => normalizeFogCell(12, 0)).toThrow();
+    expect(() => normalizeFogCell(0, 8)).toThrow();
   });
 
   it("bounds lore summaries without requiring lore", () => {

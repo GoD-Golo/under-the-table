@@ -12,6 +12,10 @@ interface AtlasWorkspaceProps {
   onPresentScene: (sceneId: string) => void;
   onCreateToken: (command: { sceneId: string; kind: "player" | "npc" | "object"; label: string; x: number; y: number; claim?: boolean }) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
+  fogEnabled: boolean;
+  fogRevealedCells: string[];
+  onSetFogEnabled: (sceneId: string, enabled: boolean) => void;
+  onSetFogCell: (sceneId: string, column: number, row: number, revealed: boolean) => void;
 }
 
 function kindLabel(kind: AtlasSceneDto["kind"]): string {
@@ -153,7 +157,7 @@ function CreateTokenSheet({ point, scene, clientName, onClose, onCreate }: {
   );
 }
 
-export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRevision, onPresentScene, onCreateToken, onMoveToken }: AtlasWorkspaceProps) {
+export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRevision, onPresentScene, onCreateToken, onMoveToken, fogEnabled, fogRevealedCells, onSetFogEnabled, onSetFogCell }: AtlasWorkspaceProps) {
   const atlas = useAtlas();
   const uploadRef = useRef<HTMLInputElement>(null);
   const [browseSceneId, setBrowseSceneId] = useState<string | null>(null);
@@ -161,6 +165,7 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
   const [followTable, setFollowTable] = useState(true);
   const [addPinMode, setAddPinMode] = useState(false);
   const [addTokenMode, setAddTokenMode] = useState(false);
+  const [fogRevealMode, setFogRevealMode] = useState(false);
   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
   const [pendingTokenPoint, setPendingTokenPoint] = useState<{ x: number; y: number } | null>(null);
   const [createKind, setCreateKind] = useState<AtlasSceneDto["kind"] | null>(null);
@@ -204,6 +209,7 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
     setSelectedHotspotId(null);
     setAddPinMode(false);
     setAddTokenMode(false);
+    setFogRevealMode(false);
     setFollowTable(sceneId === activeSceneId);
   };
 
@@ -242,6 +248,10 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
 
       <div className="scene-column">
         <div className="scene-context-bar"><div><span>{scene.id === activeSceneId ? "Live scene" : "Browsing privately"}</span><strong>{scene.name}</strong></div><div className="context-actions">
+          {scene.id === activeSceneId ? <>
+            <button className={`ghost-button ${fogEnabled ? "active" : ""}`} type="button" onClick={() => { onSetFogEnabled(scene.id, !fogEnabled); if (fogEnabled) setFogRevealMode(false); }}>Fog {fogEnabled ? "on" : "off"}</button>
+            {fogEnabled ? <button className={`ghost-button ${fogRevealMode ? "active" : ""}`} type="button" onClick={() => { setAddPinMode(false); setAddTokenMode(false); setFogRevealMode((value) => !value); }}>{fogRevealMode ? "Done reveal" : "Reveal fog"}</button> : null}
+          </> : null}
           <button className={`ghost-button ${showDirectorWidgets ? "active" : ""}`} type="button" onClick={() => setShowDirectorWidgets((value) => !value)}>{showDirectorWidgets ? "Hide DM widgets" : "DM widgets"}</button>
           {showDirectorWidgets ? <button className="ghost-button" type="button" onClick={() => setDirectorResetToken((value) => value + 1)}>Reset DM layout</button> : null}
           {!followTable && activeScene ? <button className="ghost-button" type="button" onClick={() => { setFollowTable(true); browse(activeScene.id); }}>Follow table</button> : null}
@@ -253,15 +263,19 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
           selectedHotspotLore={hotspotEntity?.summary ?? null}
           selectedHotspotLinkedSceneName={linkedScene?.name ?? null}
           addPinMode={addPinMode} addTokenMode={addTokenMode}
-          onToggleAddPin={() => { setAddTokenMode(false); setAddPinMode((value) => !value); }}
-          onToggleAddToken={() => { setAddPinMode(false); setAddTokenMode((value) => !value); }}
+          onToggleAddPin={() => { setAddTokenMode(false); setFogRevealMode(false); setAddPinMode((value) => !value); }}
+          onToggleAddToken={() => { setAddPinMode(false); setFogRevealMode(false); setAddTokenMode((value) => !value); }}
           onCanvasPoint={(point) => { setPendingPoint(point); setAddPinMode(false); }}
           onTokenPoint={(point) => { setPendingTokenPoint(point); setAddTokenMode(false); }}
           onHotspotSelect={(hotspot) => setSelectedHotspotId(hotspot.id)}
           onHotspotEnter={(hotspot) => { const target = scenes.find((item) => item.id === hotspot.linkedSceneId); if (target) browse(target.id); }}
           onTokenMove={onMoveToken}
+          fogEnabled={scene.id === activeSceneId ? fogEnabled : false}
+          fogRevealedCells={scene.id === activeSceneId ? fogRevealedCells : []}
+          fogRevealMode={fogRevealMode}
+          onFogCell={(column, row, revealed) => { if (scene.id === activeSceneId) onSetFogCell(scene.id, column, row, revealed); }}
         />
-        {showDirectorWidgets ? (
+        {showDirectorWidgets && !fogRevealMode ? (
           <DirectorOverlay
             scene={scene}
             activeScene={activeScene}
@@ -281,7 +295,7 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
         <section className="inspector-section"><div className="section-title-row"><h3>Hotspots</h3><button type="button" onClick={() => setAddPinMode(true)}>+ Add</button></div>{hotspots.length ? <p>{hotspots.length} linked point{hotspots.length === 1 ? "" : "s"} on this scene.</p> : <p>Place a pin to connect this scene to another place, scene or lore entry.</p>}</section>
         {selectedHotspot ? <section className="hotspot-inspector"><span className="inspector-kicker">Selected hotspot</span><h3>{selectedHotspot.label}</h3>{hotspotEntity ? <p>{hotspotEntity.summary}</p> : <p className="muted-copy">No lore summary attached.</p>}<div className="stack-actions">{linkedScene ? <button className="game-button primary" type="button" onClick={() => browse(linkedScene.id)}>Enter {linkedScene.name}</button> : null}<button className="ghost-button" type="button" onClick={() => setSelectedHotspotId(null)}>Close</button></div></section> : null}
         {actionError || atlas.error ? <p className="form-error">{actionError ?? atlas.error}</p> : null}
-        <p className="inspector-note">Director controls are intentionally unpermissioned in this private development slice. Auth/roles remain deferred.</p>
+        <p className="inspector-note">Director controls are intentionally unpermissioned in this private development slice. Placeholder fog is visual UX only, not a security boundary; auth/roles and filtered scene delivery remain deferred.</p>
       </aside>
 
       {createKind ? <CreateSceneSheet initialKind={createKind} onClose={() => setCreateKind(null)} onCreate={createScene} /> : null}

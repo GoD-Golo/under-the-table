@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **foundation + Vertical Slice 003.6 unified Play surface**
+Status: **foundation + Vertical Slice 003.7 simple fog placeholder**
 
 ## Boundary model
 
@@ -32,7 +32,7 @@ Colyseus remains authoritative for current table state. SurrealDB owns durable w
 
 ## Current live state
 
-The room contains the VS001 character/roll/HP state, `activeSceneId`, and a synchronized map of tokens for the active scene only. `present_scene` is an authoritative command: the server validates that the target scene exists, persists a `scene_presented` event + updated snapshot, then changes live state. A restarted room restores the active scene from the snapshot.
+The room contains the VS001 character/roll/HP state, `activeSceneId`, a synchronized map of tokens for the active scene only, and the active scene fog placeholder projection (`fogEnabled` + revealed fixed cells). `present_scene` is an authoritative command: the server validates that the target scene exists, persists a `scene_presented` event + updated snapshot, then changes live state. A restarted room restores the active scene from the snapshot.
 
 Director browsing is intentionally **not** authoritative. A client can pan, zoom, select hotspots and browse another scene without moving the table. Clients that follow the table react to `activeSceneId`; if that scene was created after their Atlas snapshot, they refresh durable Atlas data before navigating.
 
@@ -40,20 +40,21 @@ Play is a projection over session state. Virtual Table resolves `activeSceneId` 
 
 ## Current durable world model
 
-VS002/VS003 currently use four small `SCHEMAFULL` world tables:
+VS002/VS003.7 currently use five small `SCHEMAFULL` world tables:
 
 - `world_entity` — canonical lore/place identity with a player-safe summary for this slice;
 - `scene` — visual surface, optional world entity reference, grid config and background asset key;
 - `scene_hotspot` — normalized point on a scene with optional scene/entity links;
-- `scene_token` — player/NPC/object placement, normalized coordinates and optional provisional controller.
+- `scene_token` — player/NPC/object placement, normalized coordinates and optional provisional controller;
+- `scene_fog` — active-scene placeholder fog enabled state and fixed revealed-cell keys.
 
 The model deliberately permits partial entities. A scene may exist without lore; a hotspot may be lore-only; a combat scene can later be connected into the world. Creating a hotspot + child scene + optional lore entity is one database transaction.
 
 ## State categories
 
-**Authoritative live state:** HP/roll/event state, presence, `activeSceneId`, and the active scene token projection.
+**Authoritative live state:** HP/roll/event state, presence, `activeSceneId`, the active scene token projection, and active-scene placeholder fog projection.
 
-**Durable world/session state:** scenes, hotspots, lore entities, scene tokens, session events and recovery snapshots.
+**Durable world/session state:** scenes, hotspots, lore entities, scene tokens, scene fog placeholder state, session events and recovery snapshots.
 
 **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
 
@@ -61,4 +62,4 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 ## Not implemented yet
 
-Token portraits/sizing/rotation, walls, doors, fog/vision, scene permissions, DM-secret lore delivery, initiative/targeting, map drawing, travel automation, the hex-map creator, full lore editing and Content/Character/Action/Effect engines remain future work.
+Token portraits/sizing/rotation, walls, doors, secure/dynamic fog and vision, scene permissions, DM-secret lore delivery, initiative/targeting, map drawing, travel automation, the hex-map creator, full lore editing and Content/Character/Action/Effect engines remain future work.

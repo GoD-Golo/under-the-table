@@ -1,6 +1,6 @@
 # Development security posture
 
-The current Vertical Slice 001/002/003 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
+The current Vertical Slice 001 through 003.7 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
 
 Compensating development controls:
 
@@ -9,14 +9,14 @@ Compensating development controls:
 - SurrealDB and Colyseus are not published directly to the host network;
 - scene assets are served only through the same private gateway;
 - uploads are limited to PNG/JPEG/WebP, filenames are server-generated and request size is capped;
-- the database uses a `STRICT` scope and VS001/VS002/VS003 application tables are `SCHEMAFULL`;
+- the database uses a `STRICT` scope and current application tables are `SCHEMAFULL`;
 - containers that write durable data run non-root after one-shot volume ownership initialization;
 - no production/user data is used in this environment.
 - Offline Companion state (current HP, local dice result and local event log) is stored in browser `localStorage`; it is neither encrypted nor synchronized and must not be used for secrets or treated as campaign-authoritative storage.
 
 ## Known security limitation
 
-All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation and uploads. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. DM-secret notes/visibility and real ownership must not rely on it; identity and authorization need their own design and enforcement.
+All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation, fog reveal and uploads. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. The VS003.7 fog overlay is not a secrecy boundary because scene assets still reach the browser. DM-secret notes/visibility and real ownership must not rely on client-side masking or provisional client names; identity and authorization need their own design and enforcement.
 
 This environment is suitable for a private development preview, not public production.
 
