@@ -42,6 +42,9 @@ export interface LiveInitiativeEntryView {
   label: string;
   score: number;
   characterId: string | null;
+  armorClass: number | null;
+  currentHp: number | null;
+  maxHp: number | null;
 }
 
 export interface LiveViewState {
@@ -79,7 +82,7 @@ function snapshot(state: LiveRoomState): LiveViewState {
     fogRevealedCells: Array.from(state.fogRevealedCells),
     initiative: {
       round: state.initiativeRound, activeIndex: state.initiativeActiveIndex,
-      entries: Array.from(state.initiativeEntries).map((entry) => ({ id: entry.id, label: entry.label, score: entry.score, characterId: entry.characterId || null }))
+      entries: Array.from(state.initiativeEntries).map((entry) => ({ id: entry.id, label: entry.label, score: entry.score, characterId: entry.characterId || null, armorClass: entry.armorClass > 0 ? entry.armorClass : null, currentHp: entry.maxHp > 0 ? entry.currentHp : null, maxHp: entry.maxHp > 0 ? entry.maxHp : null }))
     },
     latestRoll: state.latestRollSides > 0 ? {
       sides: state.latestRollSides,
@@ -214,7 +217,7 @@ export function useLiveRoom() {
     roomRef.current?.send(MESSAGE.setFogCell, { sceneId, column, row, revealed });
   }, []);
 
-  const rollInitiative = useCallback((command: { characterId?: string; label?: string; modifier?: number }) => {
+  const rollInitiative = useCallback((command: { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }) => {
     setError(null);
     roomRef.current?.send(MESSAGE.rollInitiative, command);
   }, []);
@@ -227,6 +230,11 @@ export function useLiveRoom() {
   const clearInitiative = useCallback(() => {
     setError(null);
     roomRef.current?.send(MESSAGE.clearInitiative, {});
+  }, []);
+
+  const performBasicAttack = useCallback((command: { attackerCharacterId: string; attackId: string; targetEntryId: string }) => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.performBasicAttack, command);
   }, []);
 
   return {
@@ -246,6 +254,7 @@ export function useLiveRoom() {
     rollInitiative,
     advanceInitiative,
     clearInitiative,
+    performBasicAttack,
     reconnect: () => setAttempt((value) => value + 1)
   };
 }

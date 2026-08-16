@@ -73,7 +73,17 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - initiative/turn recovery from the session snapshot after a game-server restart;
 - desktop Companion, floating Virtual Table HUD and mobile Combat drawer all use the same session state.
 
-Full content/choice resolution (background feats, species/class features, skills/saves, inventory, attacks, spells), targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
+**Vertical Slice 006** closes the basic combat loop:
+
+- save and skill modifiers derived by the D&D 2024 adapter;
+- explicit skill proficiencies and editable basic weapon attacks in Character Builder;
+- passive Perception plus Saves/Skills roll surfaces;
+- lightweight initiative NPCs with encounter AC/HP;
+- server-authoritative target selection and basic attack/damage resolution;
+- durable character HP and encounter NPC HP keep separate sources of truth;
+- Actions/Checks are available in Companion, floating Virtual Table HUD and the mobile drawer.
+
+Full content/choice resolution (background feats, species/class features, inventory/equipment, Weapon Mastery and spells), the general targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
 
 ## Development architecture
 
@@ -96,6 +106,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-003-7.md` — simple fog placeholder evidence
 - `docs/VERTICAL-SLICE-004.md` — Character Foundation evidence
 - `docs/VERTICAL-SLICE-005.md` — playable character + initiative loop evidence
+- `docs/VERTICAL-SLICE-006.md` — checks + basic combat loop evidence
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands

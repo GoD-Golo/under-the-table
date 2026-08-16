@@ -13,7 +13,8 @@ export const MESSAGE = {
   updateCharacter: "update_character",
   rollInitiative: "roll_initiative",
   advanceInitiative: "advance_initiative",
-  clearInitiative: "clear_initiative"
+  clearInitiative: "clear_initiative",
+  performBasicAttack: "perform_basic_attack"
 } as const;
 
 export interface JoinOptions { clientName?: string }
@@ -40,4 +41,5 @@ export interface CommandErrorMessage { message: string }
 export interface CreateCharacterCommand { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }
 export interface UpdateCharacterCommand { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }
 
-export interface RollInitiativeCommand { characterId?: string; label?: string; modifier?: number }
+export interface RollInitiativeCommand { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }
+export interface PerformBasicAttackCommand { attackerCharacterId: string; attackId: string; targetEntryId: string }

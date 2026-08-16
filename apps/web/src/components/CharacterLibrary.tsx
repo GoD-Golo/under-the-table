@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { isDnd2024Data, type Dnd2024CharacterData } from "@utt/rules-dnd2024";
+import { readDnd2024Data, type Dnd2024CharacterData } from "@utt/rules-dnd2024";
 import type { LiveCharacterView } from "../live-room.js";
 import { CharacterBuilder } from "./CharacterBuilder.js";
 
@@ -15,9 +15,8 @@ interface CharacterLibraryProps {
 type BuilderMode = { kind: "create" } | { kind: "edit"; characterId: string } | null;
 
 function detail(character: LiveCharacterView): string {
-  if (character.rulesetId === "dnd2024" && isDnd2024Data(character.rulesetData)) {
-    return `Level ${character.rulesetData.level} ${character.rulesetData.classId}`;
-  }
+  const data = character.rulesetId === "dnd2024" ? readDnd2024Data(character.rulesetData) : null;
+  if (data) return `Level ${data.level} ${data.classId}`;
   return character.rulesetId === "dnd2024" ? "Needs D&D build" : character.rulesetId;
 }
 
@@ -74,7 +73,7 @@ export function CharacterLibrary({ characters, selectedCharacterId, onSelect, on
         </div>
         {selected ? <div className="character-library-footer">
           <div><span className="sheet-kicker">Selected on this device</span><strong>{selected.name}</strong><small>{detail(selected)}</small></div>
-          {selected.rulesetId === "dnd2024" ? <button className="ghost-button" type="button" onClick={() => setBuilder({ kind: "edit", characterId: selected.id })}>{isDnd2024Data(selected.rulesetData) ? "Edit build" : "Finish build"}</button> : null}
+          {selected.rulesetId === "dnd2024" ? <button className="ghost-button" type="button" onClick={() => setBuilder({ kind: "edit", characterId: selected.id })}>{readDnd2024Data(selected.rulesetData) ? "Edit build" : "Finish build"}</button> : null}
         </div> : null}
         <div className="sheet-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button></div>
       </>}

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **near-MVP foundation + Vertical Slice 005 Playable Loop**
+Status: **near-MVP foundation + Vertical Slice 006 Basic Combat Loop**
 
 ## Boundary model
 
@@ -33,7 +33,7 @@ Colyseus remains authoritative for current table state. SurrealDB owns durable w
 
 ## Current live state
 
-The room contains session roll/event state, recoverable initiative/turn state, `activeSceneId`, a synchronized map of durable character runtimes, active-scene tokens, and the active scene fog placeholder projection (`fogEnabled` + revealed fixed cells). Character HP is a character resource, not a top-level room/session field. `present_scene` is an authoritative command: the server validates that the target scene exists, persists a `scene_presented` event + updated snapshot, then changes live state. A restarted room restores the active scene from the snapshot.
+The room contains session roll/event state, recoverable initiative/turn state including lightweight NPC AC/HP, `activeSceneId`, a synchronized map of durable character runtimes, active-scene tokens, and the active scene fog placeholder projection (`fogEnabled` + revealed fixed cells). Character HP is a character resource, not a top-level room/session or initiative field. Basic attacks are server-authoritative: clients identify attacker/action/target while the server derives D&D modifiers, AC/HP and damage from canonical state. `present_scene` is an authoritative command: the server validates that the target scene exists, persists a `scene_presented` event + updated snapshot, then changes live state. A restarted room restores the active scene from the snapshot.
 
 Director browsing is intentionally **not** authoritative. A client can pan, zoom, select hotspots and browse another scene without moving the table. Clients that follow the table react to `activeSceneId`; if that scene was created after their Atlas snapshot, they refresh durable Atlas data before navigating.
 
@@ -55,9 +55,9 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 ## State categories
 
-**Authoritative live state:** roll/event state, initiative round/order/active turn, presence, `activeSceneId`, projected durable character runtimes/resources, the active scene token projection, and active-scene placeholder fog projection.
+**Authoritative live state:** roll/event state, initiative round/order/active turn plus quick-NPC encounter vitals, presence, `activeSceneId`, projected durable character runtimes/resources, the active scene token projection, and active-scene placeholder fog projection.
 
-**Durable world/session state:** scenes, hotspots, lore entities, scene tokens, scene fog placeholder state, character definitions/resources, session events and recovery snapshots. Initiative is encounter/session data persisted inside the recovery snapshot rather than a world table. Session snapshots no longer duplicate one character name/HP.
+**Durable world/session state:** scenes, hotspots, lore entities, scene tokens, scene fog placeholder state, character definitions/resources, session events and recovery snapshots. Initiative and quick-NPC AC/HP are encounter/session data persisted inside the recovery snapshot rather than a world table. Durable character HP remains in `character_resource`. Session snapshots no longer duplicate one character name/HP.
 
 **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
 
@@ -65,4 +65,4 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 ## Not implemented yet
 
-Token portraits/sizing/rotation, walls, doors, secure/dynamic fog and vision, scene permissions, DM-secret lore delivery, targeting, map drawing, travel automation, the hex-map creator, full lore editing, deeper D&D 2024 content/choice resolution (skills, feats, class/species traits, inventory, attacks, spells), character ownership/token binding and Content/Action/Effect engines remain future work.
+Token portraits/sizing/rotation, walls, doors, secure/dynamic fog and vision, scene permissions, DM-secret lore delivery, map/range targeting, map drawing, travel automation, the hex-map creator, full lore editing, deeper D&D 2024 grant/content resolution (feats, class/species traits, inventory/equipment, Weapon Mastery and spells), NPC attack automation, character ownership/token binding and the general Content/Action/Effect engines remain future work.

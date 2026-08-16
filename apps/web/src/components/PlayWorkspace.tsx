@@ -10,7 +10,7 @@ import { useSessionHudWidgets } from "./SessionHudWidgets.js";
 
 type PlayMode = "table" | "companion";
 type CompanionSource = "campaign" | "offline";
-type MobileWidget = "character" | "dice" | "initiative" | "events";
+type MobileWidget = "character" | "dice" | "actions" | "initiative" | "events";
 
 interface PlayWorkspaceProps {
   campaignState: LiveViewState | null;
@@ -21,9 +21,10 @@ interface PlayWorkspaceProps {
   onAdjustHp: (characterId: string, delta: number) => void;
   onCreateCharacter: (command: { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }) => void;
   onUpdateCharacter: (command: { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }) => void;
-  onRollInitiative: (command: { characterId?: string; label?: string; modifier?: number }) => void;
+  onRollInitiative: (command: { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }) => void;
   onAdvanceInitiative: () => void;
   onClearInitiative: () => void;
+  onPerformBasicAttack: (command: { attackerCharacterId: string; attackId: string; targetEntryId: string }) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
   onReconnect: () => void;
   onImmersiveChange: (immersive: boolean) => void;
@@ -37,7 +38,7 @@ function loadCompanionSource(): CompanionSource {
   return window.localStorage.getItem("utt.play.companion-source.v1") === "offline" ? "offline" : "campaign";
 }
 
-function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientName, onRoll, onAdjustHp, onMoveToken, onRollInitiative, onAdvanceInitiative, onClearInitiative, showHud, resetToken }: {
+function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientName, onRoll, onAdjustHp, onMoveToken, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, showHud, resetToken }: {
   state: LiveViewState;
   selectedCharacterId: string | null;
   onSelectCharacter: (characterId: string) => void;
@@ -45,14 +46,15 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
   onRoll: (sides: number, modifier: number) => void;
   onAdjustHp: (characterId: string, delta: number) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
-  onRollInitiative: (command: { characterId?: string; label?: string; modifier?: number }) => void;
+  onRollInitiative: (command: { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }) => void;
   onAdvanceInitiative: () => void;
   onClearInitiative: () => void;
+  onPerformBasicAttack: (command: { attackerCharacterId: string; attackId: string; targetEntryId: string }) => void;
   showHud: boolean;
   resetToken: number;
 }) {
   const atlas = useAtlas();
-  const widgets = useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, authority: "campaign" });
+  const widgets = useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, authority: "campaign" });
   const [mobileWidget, setMobileWidget] = useState<MobileWidget>("character");
   const scene = atlas.data?.scenes.find((item) => item.id === state.activeSceneId) ?? null;
 
@@ -65,9 +67,10 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
 
   const items: FreeformItem[] = [
     { id: "character", initial: { x: 24, y: 74, width: 350, height: 450, z: 3 }, minWidth: 290, minHeight: 360, node: widgets.character },
-    { id: "dice", initial: { x: 382, y: 96, width: 330, height: 330, z: 2 }, minWidth: 300, minHeight: 260, node: widgets.dice },
-    { id: "initiative", initial: { x: 736, y: 74, width: 340, height: 420, z: 4 }, minWidth: 300, minHeight: 300, node: widgets.initiative },
-    { id: "events", initial: { x: 1100, y: 60, width: 350, height: 450, z: 1 }, minWidth: 290, minHeight: 280, node: widgets.events }
+    { id: "dice", initial: { x: 390, y: 74, width: 330, height: 410, z: 2 }, minWidth: 300, minHeight: 300, node: widgets.dice },
+    { id: "actions", initial: { x: 735, y: 74, width: 330, height: 360, z: 5 }, minWidth: 300, minHeight: 280, node: widgets.actions },
+    { id: "initiative", initial: { x: 1080, y: 74, width: 330, height: 430, z: 4 }, minWidth: 300, minHeight: 320, node: widgets.initiative },
+    { id: "events", initial: { x: 735, y: 450, width: 500, height: 300, z: 1 }, minWidth: 320, minHeight: 250, node: widgets.events }
   ];
 
   return (
@@ -90,7 +93,7 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
         <div className="play-mobile-hud">
           <div className="play-mobile-widget">{widgets[mobileWidget]}</div>
           <nav className="play-mobile-dock" aria-label="Live HUD widgets">
-            {(["character", "dice", "initiative", "events"] as MobileWidget[]).map((id) => <button type="button" className={mobileWidget === id ? "active" : ""} key={id} onClick={() => setMobileWidget(id)}>{id === "character" ? "Character" : id === "dice" ? "Dice" : id === "initiative" ? "Combat" : "Log"}</button>)}
+            {(["character", "dice", "actions", "initiative", "events"] as MobileWidget[]).map((id) => <button type="button" className={mobileWidget === id ? "active" : ""} key={id} onClick={() => setMobileWidget(id)}>{id === "character" ? "Character" : id === "dice" ? "Checks" : id === "actions" ? "Actions" : id === "initiative" ? "Combat" : "Log"}</button>)}
           </nav>
         </div>
       </> : null}
@@ -98,7 +101,7 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
   );
 }
 
-export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onCreateCharacter, onUpdateCharacter, onRollInitiative, onAdvanceInitiative, onClearInitiative, onMoveToken, onReconnect, onImmersiveChange }: PlayWorkspaceProps) {
+export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onCreateCharacter, onUpdateCharacter, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onImmersiveChange }: PlayWorkspaceProps) {
   const [selectedCharacterId, setSelectedCharacterIdState] = useState<string | null>(() => window.localStorage.getItem("utt.play.character.v1"));
   const offline = useOfflineCompanion(campaignState, selectedCharacterId);
   const [mode, setModeState] = useState<PlayMode>(() => loadPlayMode());
@@ -190,7 +193,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
       {connectionError && !campaignState ? <div className="play-connection-note"><span>{connectionError}</span><button type="button" onClick={onReconnect}>Retry campaign</button></div> : null}
 
       {mode === "table" ? (
-        campaignState ? <VirtualTable state={campaignState} selectedCharacterId={selectedCharacterId} onSelectCharacter={selectCharacter} clientName={clientName} onRoll={onRoll} onAdjustHp={onAdjustHp} onMoveToken={onMoveToken} onRollInitiative={onRollInitiative} onAdvanceInitiative={onAdvanceInitiative} onClearInitiative={onClearInitiative} showHud={showHud} resetToken={resetToken} /> : <section className="play-unavailable"><div className="sigil">UTT</div><h1>Virtual Table needs a live campaign</h1><p>Companion can keep running from local state while the campaign is unavailable.</p><button type="button" className="game-button primary" onClick={() => setMode("companion")}>Open Companion</button></section>
+        campaignState ? <VirtualTable state={campaignState} selectedCharacterId={selectedCharacterId} onSelectCharacter={selectCharacter} clientName={clientName} onRoll={onRoll} onAdjustHp={onAdjustHp} onMoveToken={onMoveToken} onRollInitiative={onRollInitiative} onAdvanceInitiative={onAdvanceInitiative} onClearInitiative={onClearInitiative} onPerformBasicAttack={onPerformBasicAttack} showHud={showHud} resetToken={resetToken} /> : <section className="play-unavailable"><div className="sigil">UTT</div><h1>Virtual Table needs a live campaign</h1><p>Companion can keep running from local state while the campaign is unavailable.</p><button type="button" className="game-button primary" onClick={() => setMode("companion")}>Open Companion</button></section>
       ) : (
         <HudGrid
           state={companionState}
@@ -201,6 +204,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
           onRollInitiative={effectiveSource === "campaign" ? onRollInitiative : undefined}
           onAdvanceInitiative={effectiveSource === "campaign" ? onAdvanceInitiative : undefined}
           onClearInitiative={effectiveSource === "campaign" ? onClearInitiative : undefined}
+          onPerformBasicAttack={effectiveSource === "campaign" ? onPerformBasicAttack : undefined}
           layoutResetToken={resetToken}
           authority={effectiveSource}
         />
