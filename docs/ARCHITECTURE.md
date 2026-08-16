@@ -1,11 +1,11 @@
 # Architecture
 
-Status: **near-MVP foundation + Vertical Slice 006 Basic Combat Loop**
+Status: **near-MVP foundation + Vertical Slice 006 Basic Combat Loop + product landing shell**
 
 ## Boundary model
 
 ```text
-React UI / Director + unified Play surfaces + Scene Atlas
+React UI / Landing entry + Director + unified Play surfaces + Scene Atlas
         |                \
         | live intents    \ durable world edits / assets
         v                  v
@@ -21,9 +21,11 @@ scene image bytes -> private Docker asset volume
 
 Colyseus remains authoritative for current table state. SurrealDB owns durable world/session records. Scene image bytes are stored outside the database and referenced by generated asset keys.
 
+The root landing surface is presentation-only and does **not** mount `useLiveRoom()`. Entering `#play` or `#director` mounts the runtime workspace and only then opens the Colyseus connection. See ADR 0022.
+
 ## Repository shape
 
-- `apps/web` — React/Vite Atlas + game HUD
+- `apps/web` — React/Vite landing entry + Atlas + game HUD
 - `apps/game-server` — Colyseus runtime plus private development HTTP API
 - `packages/domain` — ruleset-neutral dice/HP/scene/character/session validation and domain types
 - `packages/rules-dnd2024` — D&D 2024 adapter, validation and derived character math

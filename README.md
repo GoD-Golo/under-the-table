@@ -83,6 +83,14 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - durable character HP and encounter NPC HP keep separate sources of truth;
 - Actions/Checks are available in Companion, floating Virtual Table HUD and the mobile drawer.
 
+**Brand / landing pass** adds the first intentional product-facing surface:
+
+- root landing page with the dragon-eye-under-table identity;
+- responsive laptop/phone/tablet/table choreography built in CSS/SVG;
+- direct entry into Play or Director without mounting Colyseus on passive landing visits;
+- lightweight spell visual-language preview by base slot and school;
+- matching favicon and runtime home mark.
+
 Full content/choice resolution (background feats, species/class features, inventory/equipment, Weapon Mastery and spells), the general targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
 
 ## Development architecture
@@ -107,6 +115,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-004.md` — Character Foundation evidence
 - `docs/VERTICAL-SLICE-005.md` — playable character + initiative loop evidence
 - `docs/VERTICAL-SLICE-006.md` — checks + basic combat loop evidence
+- `docs/BRAND-AND-LANDING.md` — product identity, landing composition and visual-language boundaries
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands
