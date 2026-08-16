@@ -49,3 +49,23 @@ Sources:
 - https://surrealdb.com/docs/reference/query-language/statements/define/namespace
 - https://surrealdb.com/docs/reference/query-language/statements/define/database
 - https://surrealdb.com/docs/reference/query-language/statements/use
+
+## D&D 2024 playable character subset
+
+VS005 uses the official D&D Beyond 2024 Basic Rules as the source for the small set of rules automated by `@utt/rules-dnd2024`.
+
+Implemented from those rules:
+
+- the six ability scores and standard array `15, 14, 13, 12, 10, 8`;
+- ability modifier calculation;
+- proficiency-bonus progression by level;
+- initiative based on Dexterity modifier;
+- unarmored AC baseline `10 + Dexterity modifier`;
+- class level-1 HP and fixed HP-per-additional-level suggestions.
+
+The builder intentionally stores final ability scores rather than silently applying background adjustments. Background feats/proficiencies/equipment, species traits and class features are shown by the official rules to be real character-building choices, so they remain deferred until UTT has explicit content/grant/choice modeling.
+
+Sources:
+- https://www.dndbeyond.com/sources/dnd/br-2024/creating-a-character
+- https://www.dndbeyond.com/sources/dnd/br-2024/character-origins
+- https://www.dndbeyond.com/sources/dnd/br-2024/playing-the-game

@@ -3,14 +3,17 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/rules-dnd2024/package.json packages/rules-dnd2024/package.json
 COPY packages/protocol/package.json packages/protocol/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN pnpm install --frozen-lockfile --filter @utt/web...
 RUN pnpm rebuild esbuild
 
+COPY packages/rules-dnd2024 packages/rules-dnd2024
 COPY packages/protocol packages/protocol
 COPY apps/web apps/web
-RUN pnpm --filter @utt/protocol build \
+RUN pnpm --filter @utt/rules-dnd2024 build \
+ && pnpm --filter @utt/protocol build \
  && pnpm --filter @utt/web build
 
 FROM nginx:1.29-alpine AS runtime

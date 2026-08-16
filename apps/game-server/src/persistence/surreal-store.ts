@@ -22,6 +22,7 @@ import {
   type CharacterResource,
   type CharacterRuntime,
   type GameEvent,
+  type InitiativeState,
   type RecentEvent,
   type Scene,
   type SceneFog,
@@ -493,6 +494,36 @@ export class SurrealStore {
     }
   }
 
+  async updateCharacter(input: { characterId: string; name: unknown; maxHp: unknown; rulesetData: unknown }): Promise<CharacterRuntime> {
+    await this.connect();
+    const existing = await this.getCharacterRuntime(input.characterId);
+    if (!existing) throw new Error("character not found");
+    const hpResource = existing.resources.find((resource) => resource.key === "hp");
+    if (!hpResource) throw new Error("character has no hp resource");
+    const name = normalizeCharacterName(input.name);
+    const maxHp = Number(input.maxHp);
+    const hp = normalizeResourceBounds(Math.min(hpResource.current, maxHp), maxHp);
+    const rulesetData = normalizeRulesetData(input.rulesetData);
+    const now = new Date().toISOString();
+    const txn = await this.db.beginTransaction();
+    try {
+      const characterRecord = await txn.update<CharacterRecord>(new RecordId("character", input.characterId)).merge({
+        name, ruleset_data: rulesetData, updated_at: now
+      });
+      const resourceRecord = await txn.update<CharacterResourceRecord>(new RecordId("character_resource", hpResource.id)).merge({
+        current: hp.current, max: hp.max, updated_at: now
+      });
+      await txn.commit();
+      return {
+        definition: mapCharacter(characterRecord),
+        resources: existing.resources.map((resource) => resource.key === "hp" ? mapCharacterResource(resourceRecord) : resource)
+      };
+    } catch (error) {
+      await txn.cancel();
+      throw error;
+    }
+  }
+
   async listCharacterResources(characterId: string): Promise<CharacterResource[]> {
     await this.connect();
     const [records] = await this.db.query<[CharacterResourceRecord[]]>(
@@ -731,6 +762,22 @@ export class SurrealStore {
     }
   }
 
+  private parseInitiative(value: unknown): InitiativeState | undefined {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+    const input = value as Record<string, unknown>;
+    const round = Number(input.round);
+    const activeIndex = Number(input.activeIndex);
+    if (!Number.isInteger(round) || round < 0 || !Number.isInteger(activeIndex)) return undefined;
+    if (!Array.isArray(input.entries)) return undefined;
+    const entries = input.entries.flatMap((item) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) return [];
+      const entry = item as Record<string, unknown>;
+      if (typeof entry.id !== "string" || typeof entry.label !== "string" || !Number.isInteger(Number(entry.score))) return [];
+      return [{ id: entry.id, label: entry.label, score: Number(entry.score), characterId: typeof entry.characterId === "string" ? entry.characterId : null }];
+    });
+    return { round, activeIndex: entries.length ? Math.max(0, Math.min(activeIndex, entries.length - 1)) : -1, entries };
+  }
+
   async loadSnapshot(sessionId: string): Promise<SessionSnapshot | null> {
     await this.connect();
     const record = await this.db.select<SnapshotRecord>(new RecordId("session_snapshot", sessionId));
@@ -738,12 +785,14 @@ export class SurrealStore {
     const state = record.state;
     const latest = state.latestRoll;
     const latestRoll = typeof latest === "object" && latest !== null ? latest as SessionSnapshot["latestRoll"] : null;
+    const initiative = this.parseInitiative(state.initiative);
     return {
       sessionId: record.session_id,
       sequence: record.sequence,
       activeSceneId: typeof state.activeSceneId === "string" ? state.activeSceneId : STARTER_SCENE_ID,
       latestRoll,
-      recentEvents: asRecentEvents(state.recentEvents)
+      recentEvents: asRecentEvents(state.recentEvents),
+      ...(initiative ? { initiative } : {})
     };
   }
 
@@ -765,7 +814,8 @@ export class SurrealStore {
       state: {
         activeSceneId: snapshot.activeSceneId,
         latestRoll: snapshot.latestRoll,
-        recentEvents: snapshot.recentEvents
+        recentEvents: snapshot.recentEvents,
+        initiative: snapshot.initiative ?? { round: 0, activeIndex: -1, entries: [] }
       },
       updated_at: new Date().toISOString()
     });

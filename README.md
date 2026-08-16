@@ -63,7 +63,17 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - minimal Character Library for create/select;
 - legacy Mira/HP migration from the earlier single-character room state.
 
-Walls/doors, dynamic vision/LOS, initiative/targeting, travel rules, hex-map generation, auth/roles, secure visibility/secret-lore authorization and the deeper D&D 2024 Character Builder plus Content/Action/Effect engines remain intentionally separate milestones.
+**Vertical Slice 005** turns Character Foundation into a near-MVP playable loop:
+
+- D&D 2024 mechanics live behind the dedicated `@utt/rules-dnd2024` adapter instead of generic core;
+- responsive create/edit Character Builder with class/species/background/level, six final ability scores, AC/speed/HP and notes;
+- playable sheet with derived modifiers, proficiency bonus, initiative and one-click ability checks;
+- authoritative initiative for characters plus quick ad-hoc NPCs;
+- synchronized order, active turn, round advance and clear-combat flow;
+- initiative/turn recovery from the session snapshot after a game-server restart;
+- desktop Companion, floating Virtual Table HUD and mobile Combat drawer all use the same session state.
+
+Full content/choice resolution (background feats, species/class features, skills/saves, inventory, attacks, spells), targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
 
 ## Development architecture
 
@@ -85,6 +95,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-003-6.md` — unified Virtual Table / Companion evidence
 - `docs/VERTICAL-SLICE-003-7.md` — simple fog placeholder evidence
 - `docs/VERTICAL-SLICE-004.md` — Character Foundation evidence
+- `docs/VERTICAL-SLICE-005.md` — playable character + initiative loop evidence
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands

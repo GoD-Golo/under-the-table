@@ -4,13 +4,14 @@ import type { LiveViewState } from "../live-room.js";
 import { FreeformSurface, type FreeformItem } from "./FreeformSurface.js";
 import { useSessionHudWidgets } from "./SessionHudWidgets.js";
 
-const GRID_LAYOUT_KEY = "utt.vs001.layout";
+const GRID_LAYOUT_KEY = "utt.hud.grid.v2";
 const MODE_KEY = "utt.hud.layout-mode.v1";
 
 const DEFAULT_GRID_LAYOUT: Layout = [
-  { i: "character", x: 0, y: 0, w: 4, h: 7, minW: 3, minH: 6 },
+  { i: "character", x: 0, y: 0, w: 4, h: 12, minW: 3, minH: 9 },
   { i: "dice", x: 4, y: 0, w: 4, h: 7, minW: 3, minH: 6 },
-  { i: "events", x: 8, y: 0, w: 4, h: 11, minW: 3, minH: 7 }
+  { i: "initiative", x: 8, y: 0, w: 4, h: 9, minW: 3, minH: 7 },
+  { i: "events", x: 4, y: 7, w: 4, h: 11, minW: 3, minH: 7 }
 ];
 
 type HudLayoutMode = "freeform" | "grid";
@@ -36,15 +37,18 @@ interface HudGridProps {
   onSelectCharacter: (characterId: string) => void;
   onRoll: (sides: number, modifier: number) => void;
   onAdjustHp: (characterId: string, delta: number) => void;
+  onRollInitiative?: ((command: { characterId?: string; label?: string; modifier?: number }) => void) | undefined;
+  onAdvanceInitiative?: (() => void) | undefined;
+  onClearInitiative?: (() => void) | undefined;
   layoutResetToken: number;
   authority?: "campaign" | "offline";
 }
 
-export function HudGrid({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, layoutResetToken, authority = "campaign" }: HudGridProps) {
+export function HudGrid({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, layoutResetToken, authority = "campaign" }: HudGridProps) {
   const { width, containerRef, mounted } = useContainerWidth();
   const [gridLayout, setGridLayout] = useState<Layout>(() => loadGridLayout());
   const [layoutMode, setLayoutMode] = useState<HudLayoutMode>(() => loadMode());
-  const widgets = useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, authority });
+  const widgets = useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, authority });
 
   useEffect(() => {
     if (layoutResetToken <= 0) return;
@@ -63,9 +67,10 @@ export function HudGrid({ state, selectedCharacterId, onSelectCharacter, onRoll,
   };
 
   const freeformItems: FreeformItem[] = [
-    { id: "character", initial: { x: 28, y: 64, width: 350, height: 330, z: 2 }, minWidth: 290, minHeight: 260, node: widgets.character },
-    { id: "dice", initial: { x: 405, y: 92, width: 390, height: 350, z: 3 }, minWidth: 310, minHeight: 270, node: widgets.dice },
-    { id: "events", initial: { x: 830, y: 54, width: 390, height: 530, z: 1 }, minWidth: 300, minHeight: 300, node: widgets.events }
+    { id: "character", initial: { x: 28, y: 64, width: 350, height: 460, z: 2 }, minWidth: 290, minHeight: 360, node: widgets.character },
+    { id: "dice", initial: { x: 405, y: 92, width: 360, height: 350, z: 3 }, minWidth: 310, minHeight: 270, node: widgets.dice },
+    { id: "initiative", initial: { x: 790, y: 72, width: 360, height: 430, z: 4 }, minWidth: 300, minHeight: 300, node: widgets.initiative },
+    { id: "events", initial: { x: 1175, y: 54, width: 390, height: 530, z: 1 }, minWidth: 300, minHeight: 300, node: widgets.events }
   ];
 
   return (
@@ -78,7 +83,7 @@ export function HudGrid({ state, selectedCharacterId, onSelectCharacter, onRoll,
       </div>
 
       {layoutMode === "freeform" ? (
-        <FreeformSurface items={freeformItems} storageKey="utt.hud.freeform.v1" resetToken={layoutResetToken} className="hud-freeform" />
+        <FreeformSurface items={freeformItems} storageKey="utt.hud.freeform.v2" resetToken={layoutResetToken} className="hud-freeform" />
       ) : mounted ? (
         <ReactGridLayout
           width={width}

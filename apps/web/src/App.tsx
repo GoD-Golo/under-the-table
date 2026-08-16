@@ -19,7 +19,7 @@ export function App() {
   return (
     <div className={`app-shell ${immersivePlay ? "immersive-play" : ""}`}>
       {!immersivePlay ? <header className="topbar">
-        <div className="brand-lockup"><span className="brand-mark">UTT</span><div><strong>Under The Table</strong><span>Vertical Slice 004 · Character Foundation</span></div></div>
+        <div className="brand-lockup"><span className="brand-mark">UTT</span><div><strong>Under The Table</strong><span>MVP Preview · Playable Loop</span></div></div>
 
         <div className="session-strip">
           <span className={`status-pip ${live.status}`} /><span>{live.status}</span><span className="divider" /><span>{live.clientName}</span>
@@ -40,7 +40,7 @@ export function App() {
       {view === "director" ? (
         campaignState ? <AtlasWorkspace activeSceneId={campaignState.activeSceneId} liveTokens={campaignState.tokens} clientName={live.clientName} tokenRevision={campaignState.events[campaignState.events.length - 1]?.kind.startsWith("token_") ? campaignState.eventSequence : 0} onPresentScene={live.presentScene} onCreateToken={live.createToken} onMoveToken={live.moveToken} fogEnabled={campaignState.fogEnabled} fogRevealedCells={campaignState.fogRevealedCells} onSetFogEnabled={live.setFogEnabled} onSetFogCell={live.setFogCell} /> : <main className="connecting-screen"><div className="sigil">UTT</div><h1>Opening the director table…</h1><p>Director needs the authoritative campaign runtime.</p><button className="game-button primary" type="button" onClick={() => setView("play")}>Use Play offline</button>{live.status === "disconnected" ? <button className="ghost-button" type="button" onClick={live.reconnect}>Try campaign again</button> : null}</main>
       ) : (
-        <PlayWorkspace campaignState={campaignState} clientName={live.clientName} connectionStatus={live.status} connectionError={live.error} onRoll={live.roll} onAdjustHp={live.adjustHp} onCreateCharacter={live.createCharacter} onMoveToken={live.moveToken} onReconnect={live.reconnect} onImmersiveChange={setImmersivePlay} />
+        <PlayWorkspace campaignState={campaignState} clientName={live.clientName} connectionStatus={live.status} connectionError={live.error} onRoll={live.roll} onAdjustHp={live.adjustHp} onCreateCharacter={live.createCharacter} onUpdateCharacter={live.updateCharacter} onRollInitiative={live.rollInitiative} onAdvanceInitiative={live.advanceInitiative} onClearInitiative={live.clearInitiative} onMoveToken={live.moveToken} onReconnect={live.reconnect} onImmersiveChange={setImmersivePlay} />
       )}
 
       {!immersivePlay ? <footer className="footer-note"><span>{view === "director" ? "Director workspace" : "Play workspace"}</span><span>{view === "director" ? "Browse privately · prepare · present" : "Virtual table or physical companion · one session model"}</span></footer> : null}

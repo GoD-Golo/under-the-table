@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHpEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "./session-logic.js";
+import { createHpEvent, createInitiativeAdvancedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "./session-logic.js";
 
 const base = { sessionId: "test", sequence: 4, actor: "Ada", at: "2026-08-16T00:00:00.000Z" };
 
@@ -31,6 +31,14 @@ describe("authoritative session transitions", () => {
     expect(placed.payload).toMatchObject({ tokenId: "t1", controllerName: "Ada" });
     expect(moved.kind).toBe("token_moved");
     expect(moved.payload).toMatchObject({ fromX: .2, x: .4, y: .5 });
+  });
+
+  it("creates initiative roll and advance events", () => {
+    const rolled = createInitiativeRollEvent({ ...base, entryId: "i1", characterId: "mira", label: "Mira", natural: 14, modifier: 2, total: 16 });
+    const advanced = createInitiativeAdvancedEvent({ ...base, sequence: 5, label: "Goblin", round: 2 });
+    expect(rolled.kind).toBe("initiative");
+    expect(rolled.payload).toMatchObject({ action: "rolled", total: 16, characterId: "mira" });
+    expect(advanced.summary).toContain("round 2");
   });
 
 });

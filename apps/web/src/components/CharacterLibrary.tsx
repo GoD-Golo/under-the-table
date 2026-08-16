@@ -1,66 +1,83 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { isDnd2024Data, type Dnd2024CharacterData } from "@utt/rules-dnd2024";
 import type { LiveCharacterView } from "../live-room.js";
+import { CharacterBuilder } from "./CharacterBuilder.js";
 
 interface CharacterLibraryProps {
   characters: LiveCharacterView[];
   selectedCharacterId: string | null;
   onSelect: (characterId: string) => void;
-  onCreate: (command: { name: string; rulesetId: string; maxHp: number }) => void;
+  onCreate: (command: { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }) => void;
+  onUpdate: (command: { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }) => void;
   onClose: () => void;
 }
 
-export function CharacterLibrary({ characters, selectedCharacterId, onSelect, onCreate, onClose }: CharacterLibraryProps) {
-  const [name, setName] = useState("");
-  const [rulesetId, setRulesetId] = useState("dnd2024");
-  const [maxHp, setMaxHp] = useState(10);
+type BuilderMode = { kind: "create" } | { kind: "edit"; characterId: string } | null;
+
+function detail(character: LiveCharacterView): string {
+  if (character.rulesetId === "dnd2024" && isDnd2024Data(character.rulesetData)) {
+    return `Level ${character.rulesetData.level} ${character.rulesetData.classId}`;
+  }
+  return character.rulesetId === "dnd2024" ? "Needs D&D build" : character.rulesetId;
+}
+
+export function CharacterLibrary({ characters, selectedCharacterId, onSelect, onCreate, onUpdate, onClose }: CharacterLibraryProps) {
+  const [builder, setBuilder] = useState<BuilderMode>(null);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const selected = useMemo(() => characters.find((item) => item.id === selectedCharacterId) ?? characters[0] ?? null, [characters, selectedCharacterId]);
+  const edited = builder?.kind === "edit" ? characters.find((item) => item.id === builder.characterId) ?? null : null;
 
   useEffect(() => {
     if (pendingCount === null || characters.length <= pendingCount) return;
     const created = characters[characters.length - 1];
     if (created) onSelect(created.id);
     setPendingCount(null);
-    setName("");
+    setCreateError(null);
+    setBuilder(null);
   }, [characters, onSelect, pendingCount]);
 
   useEffect(() => {
     if (pendingCount === null) return;
-    const timer = window.setTimeout(() => { setPendingCount(null); setError("Character was not created. Check the campaign connection and try again."); }, 5000);
+    const timer = window.setTimeout(() => { setPendingCount(null); setCreateError("Character was not created. Check the live connection and try again."); }, 5000);
     return () => window.clearTimeout(timer);
   }, [pendingCount]);
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const cleanName = name.trim();
-    if (!cleanName || pendingCount !== null) return;
-    setError(null);
+
+  const saveBuilder = (payload: { name: string; maxHp: number; rulesetData: Dnd2024CharacterData }) => {
+    if (builder?.kind === "edit" && edited) {
+      onUpdate({ characterId: edited.id, name: payload.name, maxHp: payload.maxHp, rulesetData: { ...payload.rulesetData } });
+      setBuilder(null);
+      return;
+    }
+    setCreateError(null);
     setPendingCount(characters.length);
-    onCreate({ name: cleanName, rulesetId, maxHp });
+    onCreate({ name: payload.name, rulesetId: "dnd2024", maxHp: payload.maxHp, rulesetData: { ...payload.rulesetData } });
+    setBuilder(null);
   };
 
-  return (
-    <div className="sheet-backdrop character-library-backdrop" role="presentation" onMouseDown={onClose}>
-      <section className="atlas-sheet character-library" aria-label="Character library" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="sheet-kicker">Party foundation</div>
-        <h2>Characters</h2>
+  return <div className="sheet-backdrop character-library-backdrop" role="presentation" onMouseDown={onClose}>
+    <section className="atlas-sheet character-library character-library-v2" aria-label="Character library" onMouseDown={(event) => event.stopPropagation()}>
+      {builder ? <CharacterBuilder character={edited} onSave={saveBuilder} onCancel={() => setBuilder(null)} /> : <>
+        <div className="character-library-heading">
+          <div><span className="sheet-kicker">Party</span><h2>Character Library</h2><p>Pick a sheet for this device or build a playable D&D 2024 character.</p></div>
+          <button className="game-button primary" type="button" onClick={() => setBuilder({ kind: "create" })}>+ New character</button>
+        </div>
+        {createError ? <p className="form-error">{createError}</p> : null}
+        {pendingCount !== null ? <p className="widget-note">Creating character in the live campaign…</p> : null}
         <div className="character-library-list">
           {characters.map((character) => {
             const hp = character.resources.find((resource) => resource.key === "hp");
-            return <button type="button" key={character.id} className={`character-library-item ${character.id === selectedCharacterId ? "active" : ""}`} onClick={() => onSelect(character.id)}>
-              <strong>{character.name}</strong><span>{character.rulesetId}</span><small>{hp ? `${hp.current} / ${hp.max} HP` : "No HP resource"}</small>
+            return <button type="button" key={character.id} className={`character-library-item ${character.id === selected?.id ? "active" : ""}`} onClick={() => onSelect(character.id)}>
+              <strong>{character.name}</strong><span>{detail(character)}</span><small>{hp ? `${hp.current} / ${hp.max} HP` : "No HP resource"}</small>
             </button>;
           })}
         </div>
-        <form className="character-create-form" onSubmit={submit}>
-          <div className="sheet-kicker">Minimal create</div>
-          <label><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="New adventurer" /></label>
-          <label><span>Ruleset</span><select value={rulesetId} onChange={(event) => setRulesetId(event.target.value)}><option value="dnd2024">D&D 2024</option><option value="custom">Custom</option></select></label>
-          <label><span>Starting max HP</span><input type="number" min={1} max={9999} value={maxHp} onChange={(event) => setMaxHp(Number(event.target.value))} /></label>
-          <p className="widget-note">Class, species, background, choices and actions come from the ruleset builder next. Core only creates identity + runtime resources here.</p>
-          {error ? <p className="form-error">{error}</p> : null}
-          <div className="sheet-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button><button className="game-button primary" type="submit" disabled={!name.trim() || pendingCount !== null}>{pendingCount !== null ? "Creating…" : "Create character"}</button></div>
-        </form>
-      </section>
-    </div>
-  );
+        {selected ? <div className="character-library-footer">
+          <div><span className="sheet-kicker">Selected on this device</span><strong>{selected.name}</strong><small>{detail(selected)}</small></div>
+          {selected.rulesetId === "dnd2024" ? <button className="ghost-button" type="button" onClick={() => setBuilder({ kind: "edit", characterId: selected.id })}>{isDnd2024Data(selected.rulesetData) ? "Edit build" : "Finish build"}</button> : null}
+        </div> : null}
+        <div className="sheet-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button></div>
+      </>}
+    </section>
+  </div>;
 }

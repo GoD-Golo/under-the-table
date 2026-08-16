@@ -15,7 +15,8 @@
     "surrealdb": "2.0.8",
     "@colyseus/core": "0.17.50",
     "@colyseus/ws-transport": "0.17.13",
-    "express": "5.2.1"
+    "express": "5.2.1",
+    "@utt/rules-dnd2024": "workspace:*"
   },
   "devDependencies": {
     "@colyseus/testing": "0.17.11",

@@ -32,7 +32,16 @@ export class CharacterState extends Schema {
   @type("string") name = "";
   @type("string") rulesetId = "";
   @type("number") schemaVersion = 1;
+  @type("string") rulesetDataJson = "{}";
   @type({ map: CharacterResourceState }) resources = new MapSchema<CharacterResourceState>();
+}
+
+
+export class InitiativeEntryState extends Schema {
+  @type("string") id = "";
+  @type("string") label = "";
+  @type("number") score = 0;
+  @type("string") characterId = "";
 }
 
 export class LiveRoomState extends Schema {
@@ -45,6 +54,9 @@ export class LiveRoomState extends Schema {
   @type("number") latestRollModifier = 0;
   @type("number") latestRollTotal = 0;
   @type("boolean") fogEnabled = false;
+  @type("number") initiativeRound = 0;
+  @type("number") initiativeActiveIndex = -1;
+  @type([InitiativeEntryState]) initiativeEntries = new ArraySchema<InitiativeEntryState>();
   @type(["string"]) fogRevealedCells = new ArraySchema<string>();
   @type([EventState]) events = new ArraySchema<EventState>();
   @type({ map: TokenState }) tokens = new MapSchema<TokenState>();
