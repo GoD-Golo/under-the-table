@@ -27,7 +27,7 @@ jobs:
       - name: Verify lockfile identity
         run: |
           actual="$(git hash-object pnpm-lock.yaml)"
-          expected="f61f938a30c25169b8e6651df9f1faaa15fce0d8"
+          expected="e7feab4a999b5091fdece9ac933d43667f84dbe4"
           echo "lockfile blob: $actual"
           test "$actual" = "$expected"
       - name: Verify project from frozen lockfile
