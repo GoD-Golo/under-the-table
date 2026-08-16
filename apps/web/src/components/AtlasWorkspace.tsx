@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { AtlasSceneDto, AtlasTokenDto } from "@utt/protocol";
 import { useAtlas, type CreateHotspotDraft, type CreateSceneDraft } from "../atlas.js";
+import { DirectorOverlay } from "./DirectorOverlay.js";
 import { SceneCanvas } from "./SceneCanvas.js";
 
 interface AtlasWorkspaceProps {
@@ -164,6 +165,8 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
   const [pendingTokenPoint, setPendingTokenPoint] = useState<{ x: number; y: number } | null>(null);
   const [createKind, setCreateKind] = useState<AtlasSceneDto["kind"] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showDirectorWidgets, setShowDirectorWidgets] = useState(() => window.matchMedia("(min-width: 900px)").matches);
+  const [directorResetToken, setDirectorResetToken] = useState(0);
 
   const scenes = atlas.data?.scenes ?? [];
   useEffect(() => {
@@ -238,16 +241,36 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
       </aside>
 
       <div className="scene-column">
-        <div className="scene-context-bar"><div><span>{scene.id === activeSceneId ? "Live scene" : "Browsing privately"}</span><strong>{scene.name}</strong></div><div className="context-actions">{!followTable && activeScene ? <button className="ghost-button" type="button" onClick={() => { setFollowTable(true); browse(activeScene.id); }}>Follow table</button> : null}<button className="game-button primary" type="button" disabled={scene.id === activeSceneId} onClick={() => { onPresentScene(scene.id); setFollowTable(true); }}>{scene.id === activeSceneId ? "On table" : "Present to table"}</button></div></div>
+        <div className="scene-context-bar"><div><span>{scene.id === activeSceneId ? "Live scene" : "Browsing privately"}</span><strong>{scene.name}</strong></div><div className="context-actions">
+          <button className={`ghost-button ${showDirectorWidgets ? "active" : ""}`} type="button" onClick={() => setShowDirectorWidgets((value) => !value)}>{showDirectorWidgets ? "Hide DM widgets" : "DM widgets"}</button>
+          {showDirectorWidgets ? <button className="ghost-button" type="button" onClick={() => setDirectorResetToken((value) => value + 1)}>Reset DM layout</button> : null}
+          {!followTable && activeScene ? <button className="ghost-button" type="button" onClick={() => { setFollowTable(true); browse(activeScene.id); }}>Follow table</button> : null}
+          <button className="game-button primary" type="button" disabled={scene.id === activeSceneId} onClick={() => { onPresentScene(scene.id); setFollowTable(true); }}>{scene.id === activeSceneId ? "On table" : "Present to table"}</button>
+        </div></div>
         <SceneCanvas
           scene={scene} hotspots={hotspots} tokens={sceneTokens} clientName={clientName}
-          selectedHotspotId={selectedHotspotId} addPinMode={addPinMode} addTokenMode={addTokenMode}
+          selectedHotspotId={selectedHotspotId}
+          selectedHotspotLore={hotspotEntity?.summary ?? null}
+          selectedHotspotLinkedSceneName={linkedScene?.name ?? null}
+          addPinMode={addPinMode} addTokenMode={addTokenMode}
           onToggleAddPin={() => { setAddTokenMode(false); setAddPinMode((value) => !value); }}
           onToggleAddToken={() => { setAddPinMode(false); setAddTokenMode((value) => !value); }}
           onCanvasPoint={(point) => { setPendingPoint(point); setAddPinMode(false); }}
           onTokenPoint={(point) => { setPendingTokenPoint(point); setAddTokenMode(false); }}
-          onHotspotSelect={(hotspot) => setSelectedHotspotId(hotspot.id)} onTokenMove={onMoveToken}
+          onHotspotSelect={(hotspot) => setSelectedHotspotId(hotspot.id)}
+          onHotspotEnter={(hotspot) => { const target = scenes.find((item) => item.id === hotspot.linkedSceneId); if (target) browse(target.id); }}
+          onTokenMove={onMoveToken}
         />
+        {showDirectorWidgets ? (
+          <DirectorOverlay
+            scene={scene}
+            activeScene={activeScene}
+            tokens={sceneTokens}
+            resetToken={directorResetToken}
+            onPresent={() => { onPresentScene(scene.id); setFollowTable(true); }}
+            onFollowTable={() => { if (activeScene) { setFollowTable(true); browse(activeScene.id); } }}
+          />
+        ) : null}
       </div>
 
       <aside className="scene-inspector">
