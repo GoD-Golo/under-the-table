@@ -17,6 +17,7 @@ Director remains the preparation/authoring projection and may browse privately a
 
 ## Consequences
 - maps are optional participation surfaces rather than the definition of a live session;
+- Virtual Table may use immersive browser-clean presentation and optional browser fullscreen; application chrome/fullscreen choice remains presentation state;
 - virtual, physical and mixed-device tables can share one session model;
 - DM/player widget catalogs can keep using the same freeform primitive;
 - offline local changes are intentionally isolated and require a future explicit merge/conflict design before campaign synchronization;

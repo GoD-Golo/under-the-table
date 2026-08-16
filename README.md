@@ -41,6 +41,7 @@ The product goal is one continuous tool for world building, lore, scene navigati
 **Vertical Slice 003.6** unifies the actual play experience:
 
 - Virtual Table uses the active scene/map + synchronized tokens as the base live surface;
+- Virtual Table is immersive by default: application chrome disappears, leaving only discreet bubble/tray controls and optional browser fullscreen;
 - the same Character/Dice/Log widgets float above the map;
 - Companion preserves a map-free surface for physical play;
 - Companion can use connected campaign state or explicit browser-local offline state;
