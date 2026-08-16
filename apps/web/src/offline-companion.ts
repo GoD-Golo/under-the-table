@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import type { LiveViewState } from "./live-room.js";
+import type { LiveCharacterView, LiveViewState } from "./live-room.js";
 
-const STORAGE_KEY = "utt.offline.companion.v1";
+const STORAGE_KEY = "utt.offline.companion.v2";
 const MAX_EVENTS = 50;
 
 function localRandomInt(maxExclusive: number): number {
@@ -14,13 +14,20 @@ function localRandomInt(maxExclusive: number): number {
   return (buffer[0] ?? 0) % maxExclusive;
 }
 
-function offlineState(seed: LiveViewState | null, copied = false): LiveViewState {
+function cloneCharacter(character: LiveCharacterView | null): LiveCharacterView {
+  if (!character) return {
+    id: "offline-adventurer", name: "Offline Adventurer", rulesetId: "custom", schemaVersion: 1,
+    resources: [{ id: "offline-hp", key: "hp", label: "Hit points", current: 10, max: 10 }]
+  };
+  return { ...character, resources: character.resources.map((resource) => ({ ...resource })) };
+}
+function offlineState(seed: LiveViewState | null, selectedCharacterId: string | null, copied = false): LiveViewState {
+  const selected = seed?.characters.find((character) => character.id === selectedCharacterId) ?? seed?.characters[0] ?? null;
+  const character = cloneCharacter(selected);
   const now = new Date().toISOString();
   return {
     sessionId: seed ? `offline-${seed.sessionId}` : "offline-local",
-    characterName: seed?.characterName ?? "Offline Adventurer",
-    hp: seed?.hp ?? 10,
-    maxHp: seed?.maxHp ?? 10,
+    characters: [character],
     connectedPlayers: 1,
     eventSequence: copied ? 1 : 0,
     activeSceneId: "",
@@ -28,24 +35,23 @@ function offlineState(seed: LiveViewState | null, copied = false): LiveViewState
     fogEnabled: false,
     fogRevealedCells: [],
     latestRoll: null,
-    events: copied ? [{ sequence: 1, kind: "offline", actor: "Local", summary: "Copied current campaign character state for offline play", at: now }] : []
+    events: copied ? [{ sequence: 1, kind: "offline", actor: "Local", summary: `Copied ${character.name} for offline play`, at: now }] : []
   };
 }
 
-function loadOffline(seed: LiveViewState | null): LiveViewState {
+function loadOffline(seed: LiveViewState | null, selectedCharacterId: string | null): LiveViewState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return offlineState(seed);
+    if (!raw) return offlineState(seed, selectedCharacterId);
     const parsed = JSON.parse(raw) as LiveViewState;
-    if (typeof parsed.characterName !== "string" || !Number.isFinite(parsed.hp) || !Number.isFinite(parsed.maxHp) || !Array.isArray(parsed.events)) return offlineState(seed);
-    return { ...parsed, connectedPlayers: 1, activeSceneId: "", tokens: [] };
+    if (!Array.isArray(parsed.characters) || parsed.characters.length === 0 || !Array.isArray(parsed.events)) return offlineState(seed, selectedCharacterId);
+    return { ...parsed, connectedPlayers: 1, activeSceneId: "", tokens: [], fogEnabled: false, fogRevealedCells: [] };
   } catch {
-    return offlineState(seed);
+    return offlineState(seed, selectedCharacterId);
   }
 }
-
-export function useOfflineCompanion(seed: LiveViewState | null) {
-  const [state, setState] = useState<LiveViewState>(() => loadOffline(seed));
+export function useOfflineCompanion(seed: LiveViewState | null, selectedCharacterId: string | null) {
+  const [state, setState] = useState<LiveViewState>(() => loadOffline(seed, selectedCharacterId));
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -59,18 +65,28 @@ export function useOfflineCompanion(seed: LiveViewState | null) {
     });
   }, []);
 
-  const adjustHp = useCallback((delta: number) => {
+  const adjustHp = useCallback((characterId: string, delta: number) => {
     if (!Number.isFinite(delta)) return;
-    appendEvent("hp", `${delta >= 0 ? "+" : ""}${delta} HP (offline)`, (current) => ({ hp: Math.max(0, Math.min(current.maxHp, current.hp + delta)) }));
+    appendEvent("hp", `${delta >= 0 ? "+" : ""}${delta} HP (offline)`, (current) => ({
+      characters: current.characters.map((character) => {
+        if (character.id !== characterId) return character;
+        return { ...character, resources: character.resources.map((resource) => resource.key === "hp"
+          ? { ...resource, current: Math.max(0, Math.min(resource.max, resource.current + delta)) }
+          : resource) };
+      })
+    }));
   }, [appendEvent]);
-
   const roll = useCallback((sides: number, modifier: number) => {
     const natural = localRandomInt(sides) + 1;
     const total = natural + modifier;
-    appendEvent("roll", `Rolled d${sides} ${modifier >= 0 ? "+" : ""}${modifier}: ${total} (offline)`, () => ({ latestRoll: { sides, natural, modifier, total } }));
+    appendEvent("roll", `Rolled d${sides} ${modifier >= 0 ? "+" : ""}${modifier}: ${total} (offline)`, () => ({
+      latestRoll: { sides, natural, modifier, total }
+    }));
   }, [appendEvent]);
 
-  const adoptCampaign = useCallback((campaign: LiveViewState) => setState(offlineState(campaign, true)), []);
+  const adoptCampaign = useCallback((campaign: LiveViewState, characterId: string | null) => {
+    setState(offlineState(campaign, characterId, true));
+  }, []);
 
   return { state, adjustHp, roll, adoptCampaign };
 }

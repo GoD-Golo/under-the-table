@@ -18,12 +18,26 @@ export class TokenState extends Schema {
   @type("string") controllerName = "";
 }
 
+
+export class CharacterResourceState extends Schema {
+  @type("string") id = "";
+  @type("string") key = "";
+  @type("string") label = "";
+  @type("number") current = 0;
+  @type("number") max = 0;
+}
+
+export class CharacterState extends Schema {
+  @type("string") id = "";
+  @type("string") name = "";
+  @type("string") rulesetId = "";
+  @type("number") schemaVersion = 1;
+  @type({ map: CharacterResourceState }) resources = new MapSchema<CharacterResourceState>();
+}
+
 export class LiveRoomState extends Schema {
   @type("string") sessionId = "";
-  @type("string") characterName = "";
   @type("string") activeSceneId = "";
-  @type("number") hp = 0;
-  @type("number") maxHp = 0;
   @type("number") connectedPlayers = 0;
   @type("number") eventSequence = 0;
   @type("number") latestRollSides = 0;
@@ -34,4 +48,5 @@ export class LiveRoomState extends Schema {
   @type(["string"]) fogRevealedCells = new ArraySchema<string>();
   @type([EventState]) events = new ArraySchema<EventState>();
   @type({ map: TokenState }) tokens = new MapSchema<TokenState>();
+  @type({ map: CharacterState }) characters = new MapSchema<CharacterState>();
 }

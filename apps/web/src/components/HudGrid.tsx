@@ -32,17 +32,19 @@ function loadMode(): HudLayoutMode {
 
 interface HudGridProps {
   state: LiveViewState;
+  selectedCharacterId: string | null;
+  onSelectCharacter: (characterId: string) => void;
   onRoll: (sides: number, modifier: number) => void;
-  onAdjustHp: (delta: number) => void;
+  onAdjustHp: (characterId: string, delta: number) => void;
   layoutResetToken: number;
   authority?: "campaign" | "offline";
 }
 
-export function HudGrid({ state, onRoll, onAdjustHp, layoutResetToken, authority = "campaign" }: HudGridProps) {
+export function HudGrid({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, layoutResetToken, authority = "campaign" }: HudGridProps) {
   const { width, containerRef, mounted } = useContainerWidth();
   const [gridLayout, setGridLayout] = useState<Layout>(() => loadGridLayout());
   const [layoutMode, setLayoutMode] = useState<HudLayoutMode>(() => loadMode());
-  const widgets = useSessionHudWidgets({ state, onRoll, onAdjustHp, authority });
+  const widgets = useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, authority });
 
   useEffect(() => {
     if (layoutResetToken <= 0) return;

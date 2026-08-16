@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAtlas } from "../atlas.js";
 import type { LiveViewState } from "../live-room.js";
 import { useOfflineCompanion } from "../offline-companion.js";
+import { CharacterLibrary } from "./CharacterLibrary.js";
 import { FreeformSurface, type FreeformItem } from "./FreeformSurface.js";
 import { HudGrid } from "./HudGrid.js";
 import { SceneCanvas } from "./SceneCanvas.js";
@@ -17,7 +18,8 @@ interface PlayWorkspaceProps {
   connectionStatus: "connecting" | "connected" | "disconnected";
   connectionError: string | null;
   onRoll: (sides: number, modifier: number) => void;
-  onAdjustHp: (delta: number) => void;
+  onAdjustHp: (characterId: string, delta: number) => void;
+  onCreateCharacter: (command: { name: string; rulesetId: string; maxHp: number }) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
   onReconnect: () => void;
   onImmersiveChange: (immersive: boolean) => void;
@@ -31,17 +33,19 @@ function loadCompanionSource(): CompanionSource {
   return window.localStorage.getItem("utt.play.companion-source.v1") === "offline" ? "offline" : "campaign";
 }
 
-function VirtualTable({ state, clientName, onRoll, onAdjustHp, onMoveToken, showHud, resetToken }: {
+function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientName, onRoll, onAdjustHp, onMoveToken, showHud, resetToken }: {
   state: LiveViewState;
+  selectedCharacterId: string | null;
+  onSelectCharacter: (characterId: string) => void;
   clientName: string;
   onRoll: (sides: number, modifier: number) => void;
-  onAdjustHp: (delta: number) => void;
+  onAdjustHp: (characterId: string, delta: number) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
   showHud: boolean;
   resetToken: number;
 }) {
   const atlas = useAtlas();
-  const widgets = useSessionHudWidgets({ state, onRoll, onAdjustHp, authority: "campaign" });
+  const widgets = useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, authority: "campaign" });
   const [mobileWidget, setMobileWidget] = useState<MobileWidget>("character");
   const scene = atlas.data?.scenes.find((item) => item.id === state.activeSceneId) ?? null;
 
@@ -86,15 +90,30 @@ function VirtualTable({ state, clientName, onRoll, onAdjustHp, onMoveToken, show
   );
 }
 
-export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onMoveToken, onReconnect, onImmersiveChange }: PlayWorkspaceProps) {
-  const offline = useOfflineCompanion(campaignState);
+export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onCreateCharacter, onMoveToken, onReconnect, onImmersiveChange }: PlayWorkspaceProps) {
+  const [selectedCharacterId, setSelectedCharacterIdState] = useState<string | null>(() => window.localStorage.getItem("utt.play.character.v1"));
+  const offline = useOfflineCompanion(campaignState, selectedCharacterId);
   const [mode, setModeState] = useState<PlayMode>(() => loadPlayMode());
   const [companionSource, setCompanionSourceState] = useState<CompanionSource>(() => loadCompanionSource());
   const [showHud, setShowHud] = useState(true);
   const [resetToken, setResetToken] = useState(0);
   const [fullscreenActive, setFullscreenActive] = useState(() => document.fullscreenElement !== null);
   const [utilityTrayOpen, setUtilityTrayOpen] = useState(false);
+  const [characterLibraryOpen, setCharacterLibraryOpen] = useState(false);
   const fullscreenSupported = document.fullscreenEnabled;
+
+  useEffect(() => {
+    if (!campaignState?.characters.length) return;
+    if (selectedCharacterId && campaignState.characters.some((character) => character.id === selectedCharacterId)) return;
+    const next = campaignState.characters[0]?.id ?? null;
+    setSelectedCharacterIdState(next);
+    if (next) window.localStorage.setItem("utt.play.character.v1", next);
+  }, [campaignState, selectedCharacterId]);
+
+  const selectCharacter = (characterId: string) => {
+    setSelectedCharacterIdState(characterId);
+    window.localStorage.setItem("utt.play.character.v1", characterId);
+  };
   useEffect(() => {
     onImmersiveChange(mode === "table" && !!campaignState);
     return () => onImmersiveChange(false);
@@ -133,6 +152,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
         <button type="button" className="play-bubble play-back-bubble" onClick={() => void leaveVirtualTable()} aria-label="Back to Play" title="Back to Play">←</button>
         <div className={`play-utility-bubble ${utilityTrayOpen ? "open" : ""}`}>
           {utilityTrayOpen ? <div className="play-bubble-tray" role="group" aria-label="Virtual Table tools">
+            <button type="button" onClick={() => setCharacterLibraryOpen(true)}>Characters</button>
             <button type="button" onClick={() => setShowHud((value) => !value)} aria-pressed={!showHud}>{showHud ? "Hide HUD" : "Show HUD"}</button>
             <button type="button" disabled={!fullscreenSupported} onClick={() => void toggleFullscreen()} aria-pressed={fullscreenActive} title={fullscreenSupported ? "Toggle browser fullscreen" : "Fullscreen is not supported by this browser"}>{fullscreenActive ? "Exit fullscreen" : "Fullscreen"}</button>
           </div> : null}
@@ -145,24 +165,29 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
         </div>
         <div className="play-toolbar-status"><span className={`status-pip ${connectionStatus}`} /><span>{campaignState ? "Campaign connected" : "No live campaign"}</span></div>
         <div className="play-toolbar-actions">
+          {campaignState ? <button type="button" className="ghost-button" onClick={() => setCharacterLibraryOpen(true)}>Characters</button> : null}
           {mode === "table" ? <><button type="button" className="ghost-button" onClick={() => setShowHud((value) => !value)}>{showHud ? "Hide HUD" : "Show HUD"}</button>{showHud ? <button type="button" className="ghost-button" onClick={() => setResetToken((value) => value + 1)}>Reset HUD</button> : null}</> : <>
             <div className="companion-source-switch" role="group" aria-label="Companion data source">
               <button type="button" className={effectiveSource === "campaign" ? "active" : ""} disabled={!campaignState} onClick={() => setCompanionSource("campaign")}>Campaign</button>
               <button type="button" className={effectiveSource === "offline" ? "active" : ""} onClick={() => setCompanionSource("offline")}>Offline local</button>
             </div>
-            {effectiveSource === "offline" && campaignState ? <button type="button" className="ghost-button" onClick={() => offline.adoptCampaign(campaignState)}>Copy campaign state</button> : null}
+            {effectiveSource === "offline" && campaignState ? <button type="button" className="ghost-button" onClick={() => offline.adoptCampaign(campaignState, selectedCharacterId)}>Copy campaign state</button> : null}
             <button type="button" className="ghost-button" onClick={() => setResetToken((value) => value + 1)}>Reset HUD</button>
           </>}
         </div>
       </header>}
 
+      {characterLibraryOpen && campaignState ? <CharacterLibrary characters={campaignState.characters} selectedCharacterId={selectedCharacterId} onSelect={selectCharacter} onCreate={onCreateCharacter} onClose={() => setCharacterLibraryOpen(false)} /> : null}
+
       {connectionError && !campaignState ? <div className="play-connection-note"><span>{connectionError}</span><button type="button" onClick={onReconnect}>Retry campaign</button></div> : null}
 
       {mode === "table" ? (
-        campaignState ? <VirtualTable state={campaignState} clientName={clientName} onRoll={onRoll} onAdjustHp={onAdjustHp} onMoveToken={onMoveToken} showHud={showHud} resetToken={resetToken} /> : <section className="play-unavailable"><div className="sigil">UTT</div><h1>Virtual Table needs a live campaign</h1><p>Companion can keep running from local state while the campaign is unavailable.</p><button type="button" className="game-button primary" onClick={() => setMode("companion")}>Open Companion</button></section>
+        campaignState ? <VirtualTable state={campaignState} selectedCharacterId={selectedCharacterId} onSelectCharacter={selectCharacter} clientName={clientName} onRoll={onRoll} onAdjustHp={onAdjustHp} onMoveToken={onMoveToken} showHud={showHud} resetToken={resetToken} /> : <section className="play-unavailable"><div className="sigil">UTT</div><h1>Virtual Table needs a live campaign</h1><p>Companion can keep running from local state while the campaign is unavailable.</p><button type="button" className="game-button primary" onClick={() => setMode("companion")}>Open Companion</button></section>
       ) : (
         <HudGrid
           state={companionState}
+          selectedCharacterId={selectedCharacterId}
+          onSelectCharacter={selectCharacter}
           onRoll={effectiveSource === "campaign" ? onRoll : offline.roll}
           onAdjustHp={effectiveSource === "campaign" ? onAdjustHp : offline.adjustHp}
           layoutResetToken={resetToken}

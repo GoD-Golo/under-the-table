@@ -21,10 +21,7 @@ export interface RecentEvent {
 export interface SessionSnapshot {
   sessionId: string;
   sequence: number;
-  characterName: string;
   activeSceneId: string;
-  hp: number;
-  maxHp: number;
   latestRoll: {
     sides: number;
     natural: number;

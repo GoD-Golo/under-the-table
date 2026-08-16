@@ -1,16 +1,26 @@
 import { randomUUID } from "node:crypto";
 import { RecordId, Surreal, Table } from "surrealdb";
 import {
+  DEFAULT_RULESET_ID,
+  STARTER_CHARACTER_ID,
   STARTER_SCENE_ID,
+  normalizeCharacterName,
   normalizeFogCell,
   normalizeGrid,
   normalizeHotspotCoordinate,
   normalizeLoreSummary,
+  normalizeResourceBounds,
+  normalizeResourceKey,
+  normalizeRulesetData,
+  normalizeRulesetId,
   normalizeSceneKind,
   normalizeSceneName,
   normalizeTokenCoordinate,
   normalizeTokenKind,
   normalizeTokenLabel,
+  type CharacterDefinition,
+  type CharacterResource,
+  type CharacterRuntime,
   type GameEvent,
   type RecentEvent,
   type Scene,
@@ -20,6 +30,29 @@ import {
   type SessionSnapshot,
   type WorldEntity
 } from "@utt/domain";
+
+
+interface CharacterRecord {
+  [key: string]: unknown;
+  character_id: string;
+  name: string;
+  ruleset_id: string;
+  schema_version: number;
+  ruleset_data: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CharacterResourceRecord {
+  [key: string]: unknown;
+  resource_id: string;
+  character_id: string;
+  resource_key: string;
+  label: string;
+  current: number;
+  max: number;
+  updated_at: string;
+}
 
 interface SnapshotRecord {
   session_id: string;
@@ -110,6 +143,26 @@ DEFINE FIELD IF NOT EXISTS state ON TABLE session_snapshot TYPE object FLEXIBLE;
 DEFINE FIELD IF NOT EXISTS updated_at ON TABLE session_snapshot TYPE string;
 DEFINE INDEX IF NOT EXISTS session_snapshot_session ON TABLE session_snapshot FIELDS session_id UNIQUE;
 
+
+DEFINE TABLE IF NOT EXISTS character SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS character_id ON TABLE character TYPE string;
+DEFINE FIELD IF NOT EXISTS name ON TABLE character TYPE string;
+DEFINE FIELD IF NOT EXISTS ruleset_id ON TABLE character TYPE string;
+DEFINE FIELD IF NOT EXISTS schema_version ON TABLE character TYPE int ASSERT $value >= 1;
+DEFINE FIELD IF NOT EXISTS ruleset_data ON TABLE character TYPE object FLEXIBLE;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE character TYPE string;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE character TYPE string;
+
+DEFINE TABLE IF NOT EXISTS character_resource SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS resource_id ON TABLE character_resource TYPE string;
+DEFINE FIELD IF NOT EXISTS character_id ON TABLE character_resource TYPE string;
+DEFINE FIELD IF NOT EXISTS resource_key ON TABLE character_resource TYPE string;
+DEFINE FIELD IF NOT EXISTS label ON TABLE character_resource TYPE string;
+DEFINE FIELD IF NOT EXISTS current ON TABLE character_resource TYPE int ASSERT $value >= 0;
+DEFINE FIELD IF NOT EXISTS max ON TABLE character_resource TYPE int ASSERT $value > 0;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE character_resource TYPE string;
+DEFINE INDEX IF NOT EXISTS character_resource_key ON TABLE character_resource FIELDS character_id, resource_key UNIQUE;
+
 DEFINE TABLE IF NOT EXISTS world_entity SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS entity_id ON TABLE world_entity TYPE string;
 DEFINE FIELD IF NOT EXISTS kind ON TABLE world_entity TYPE string;
@@ -192,6 +245,21 @@ function asRecentEvents(value: unknown): RecentEvent[] {
       at: event.at
     }];
   });
+}
+
+
+function mapCharacter(record: CharacterRecord): CharacterDefinition {
+  return {
+    id: record.character_id, name: record.name, rulesetId: record.ruleset_id, schemaVersion: record.schema_version,
+    rulesetData: { ...record.ruleset_data }, createdAt: record.created_at, updatedAt: record.updated_at
+  };
+}
+
+function mapCharacterResource(record: CharacterResourceRecord): CharacterResource {
+  return {
+    id: record.resource_id, characterId: record.character_id, key: record.resource_key, label: record.label,
+    current: record.current, max: record.max, updatedAt: record.updated_at
+  };
 }
 
 function mapScene(record: SceneRecord): Scene {
@@ -354,6 +422,119 @@ export class SurrealStore {
   async ensureStarterScene(): Promise<Scene> {
     await this.connect();
     return this.ensureStarterSceneInternal();
+  }
+
+  private async createCharacterInTransaction(
+    txn: SurrealTransaction,
+    input: { id: string; name: unknown; rulesetId: unknown; maxHp: unknown; currentHp?: unknown; rulesetData?: unknown }
+  ): Promise<CharacterRuntime> {
+    const name = normalizeCharacterName(input.name);
+    const rulesetId = normalizeRulesetId(input.rulesetId);
+    const maxHp = Number(input.maxHp);
+    const currentHp = input.currentHp === undefined ? maxHp : Number(input.currentHp);
+    const hp = normalizeResourceBounds(currentHp, maxHp);
+    const rulesetData = normalizeRulesetData(input.rulesetData);
+    const now = new Date().toISOString();
+    const characterRecord = await txn.create<CharacterRecord>(new RecordId("character", input.id)).content({
+      character_id: input.id, name, ruleset_id: rulesetId, schema_version: 1, ruleset_data: rulesetData,
+      created_at: now, updated_at: now
+    });
+    const resourceId = randomUUID();
+    const resourceRecord = await txn.create<CharacterResourceRecord>(new RecordId("character_resource", resourceId)).content({
+      resource_id: resourceId, character_id: input.id, resource_key: "hp", label: "Hit points",
+      current: hp.current, max: hp.max, updated_at: now
+    });
+    return { definition: mapCharacter(characterRecord), resources: [mapCharacterResource(resourceRecord)] };
+  }
+
+  async ensureStarterCharacterFromLegacySnapshot(sessionId: string): Promise<CharacterRuntime> {
+    await this.connect();
+    const existing = await this.db.select<CharacterRecord>(new RecordId("character", STARTER_CHARACTER_ID));
+    if (existing) {
+      const resources = await this.listCharacterResources(STARTER_CHARACTER_ID);
+      if (resources.some((resource) => resource.key === "hp")) return { definition: mapCharacter(existing), resources };
+      const now = new Date().toISOString();
+      const resourceId = randomUUID();
+      const record = await this.db.create<CharacterResourceRecord>(new RecordId("character_resource", resourceId)).content({
+        resource_id: resourceId, character_id: STARTER_CHARACTER_ID, resource_key: "hp", label: "Hit points",
+        current: 32, max: 32, updated_at: now
+      });
+      return { definition: mapCharacter(existing), resources: [mapCharacterResource(record)] };
+    }
+
+    const legacySnapshot = await this.db.select<SnapshotRecord>(new RecordId("session_snapshot", sessionId));
+    const legacy = legacySnapshot?.state ?? {};
+    const name = typeof legacy.characterName === "string" ? legacy.characterName : "Mira Voss";
+    const legacyMax = typeof legacy.maxHp === "number" && Number.isInteger(legacy.maxHp) && legacy.maxHp > 0 ? legacy.maxHp : 32;
+    const legacyCurrent = typeof legacy.hp === "number" && Number.isInteger(legacy.hp) && legacy.hp >= 0 && legacy.hp <= legacyMax ? legacy.hp : legacyMax;
+    const txn = await this.db.beginTransaction();
+    try {
+      const runtime = await this.createCharacterInTransaction(txn, {
+        id: STARTER_CHARACTER_ID, name, rulesetId: DEFAULT_RULESET_ID, maxHp: legacyMax, currentHp: legacyCurrent, rulesetData: {}
+      });
+      await txn.commit();
+      return runtime;
+    } catch (error) {
+      await txn.cancel();
+      throw error;
+    }
+  }
+
+  async createCharacter(input: { name: unknown; rulesetId: unknown; maxHp: unknown; rulesetData?: unknown }): Promise<CharacterRuntime> {
+    await this.connect();
+    const txn = await this.db.beginTransaction();
+    try {
+      const runtime = await this.createCharacterInTransaction(txn, { id: randomUUID(), ...input });
+      await txn.commit();
+      return runtime;
+    } catch (error) {
+      await txn.cancel();
+      throw error;
+    }
+  }
+
+  async listCharacterResources(characterId: string): Promise<CharacterResource[]> {
+    await this.connect();
+    const [records] = await this.db.query<[CharacterResourceRecord[]]>(
+      "SELECT * FROM character_resource WHERE character_id = $characterId ORDER BY resource_key ASC",
+      { characterId }
+    );
+    return (records ?? []).map(mapCharacterResource);
+  }
+
+  async getCharacterRuntime(characterId: string): Promise<CharacterRuntime | null> {
+    await this.connect();
+    const record = await this.db.select<CharacterRecord>(new RecordId("character", characterId));
+    if (!record) return null;
+    return { definition: mapCharacter(record), resources: await this.listCharacterResources(characterId) };
+  }
+
+  async listCharacterRuntimes(): Promise<CharacterRuntime[]> {
+    await this.connect();
+    const [characters, resources] = await Promise.all([
+      this.db.select<CharacterRecord>(new Table("character")),
+      this.db.select<CharacterResourceRecord>(new Table("character_resource"))
+    ]);
+    const byCharacter = new Map<string, CharacterResource[]>();
+    for (const resource of resources.map(mapCharacterResource)) {
+      const list = byCharacter.get(resource.characterId) ?? [];
+      list.push(resource);
+      byCharacter.set(resource.characterId, list);
+    }
+    return characters.map(mapCharacter).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((definition) => ({
+      definition, resources: (byCharacter.get(definition.id) ?? []).sort((a, b) => a.key.localeCompare(b.key))
+    }));
+  }
+
+  async getCharacterResource(characterId: string, keyInput: unknown): Promise<CharacterResource | null> {
+    await this.connect();
+    const key = normalizeResourceKey(keyInput);
+    const [records] = await this.db.query<[CharacterResourceRecord[]]>(
+      "SELECT * FROM character_resource WHERE character_id = $characterId AND resource_key = $key LIMIT 1",
+      { characterId, key }
+    );
+    const record = records?.[0];
+    return record ? mapCharacterResource(record) : null;
   }
 
   async loadAtlas(): Promise<{ scenes: Scene[]; hotspots: SceneHotspot[]; entities: WorldEntity[]; tokens: SceneToken[] }> {
@@ -557,16 +738,10 @@ export class SurrealStore {
     const state = record.state;
     const latest = state.latestRoll;
     const latestRoll = typeof latest === "object" && latest !== null ? latest as SessionSnapshot["latestRoll"] : null;
-    if (typeof state.characterName !== "string" || typeof state.hp !== "number" || typeof state.maxHp !== "number") {
-      throw new Error(`snapshot ${sessionId} has an invalid state shape`);
-    }
     return {
       sessionId: record.session_id,
       sequence: record.sequence,
-      characterName: state.characterName,
       activeSceneId: typeof state.activeSceneId === "string" ? state.activeSceneId : STARTER_SCENE_ID,
-      hp: state.hp,
-      maxHp: state.maxHp,
       latestRoll,
       recentEvents: asRecentEvents(state.recentEvents)
     };
@@ -588,10 +763,7 @@ export class SurrealStore {
       session_id: snapshot.sessionId,
       sequence: snapshot.sequence,
       state: {
-        characterName: snapshot.characterName,
         activeSceneId: snapshot.activeSceneId,
-        hp: snapshot.hp,
-        maxHp: snapshot.maxHp,
         latestRoll: snapshot.latestRoll,
         recentEvents: snapshot.recentEvents
       },
@@ -640,6 +812,27 @@ export class SurrealStore {
       await this.persistSessionInTransaction(txn, event, snapshot);
       await txn.commit();
       return mapToken(record);
+    } catch (error) {
+      await txn.cancel();
+      throw error;
+    }
+  }
+
+  async updateCharacterResourceWithEvent(
+    characterId: string, keyInput: unknown, currentInput: unknown, event: GameEvent, snapshot: SessionSnapshot
+  ): Promise<CharacterResource> {
+    await this.connect();
+    const existing = await this.getCharacterResource(characterId, keyInput);
+    if (!existing) throw new Error("character resource not found");
+    const bounds = normalizeResourceBounds(currentInput, existing.max);
+    const txn = await this.db.beginTransaction();
+    try {
+      const record = await txn.update<CharacterResourceRecord>(new RecordId("character_resource", existing.id)).merge({
+        current: bounds.current, updated_at: new Date().toISOString()
+      });
+      await this.persistSessionInTransaction(txn, event, snapshot);
+      await txn.commit();
+      return mapCharacterResource(record);
     } catch (error) {
       await txn.cancel();
       throw error;

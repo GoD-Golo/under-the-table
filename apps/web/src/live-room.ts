@@ -18,11 +18,26 @@ export interface LiveTokenView {
   controllerName: string | null;
 }
 
+
+export interface LiveCharacterResourceView {
+  id: string;
+  key: string;
+  label: string;
+  current: number;
+  max: number;
+}
+
+export interface LiveCharacterView {
+  id: string;
+  name: string;
+  rulesetId: string;
+  schemaVersion: number;
+  resources: LiveCharacterResourceView[];
+}
+
 export interface LiveViewState {
   sessionId: string;
-  characterName: string;
-  hp: number;
-  maxHp: number;
+  characters: LiveCharacterView[];
   connectedPlayers: number;
   eventSequence: number;
   activeSceneId: string;
@@ -36,9 +51,12 @@ export interface LiveViewState {
 function snapshot(state: LiveRoomState): LiveViewState {
   return {
     sessionId: state.sessionId,
-    characterName: state.characterName,
-    hp: state.hp,
-    maxHp: state.maxHp,
+    characters: Array.from(state.characters.values()).map((character) => ({
+      id: character.id, name: character.name, rulesetId: character.rulesetId, schemaVersion: character.schemaVersion,
+      resources: Array.from(character.resources.values()).map((resource) => ({
+        id: resource.id, key: resource.key, label: resource.label, current: resource.current, max: resource.max
+      }))
+    })),
     connectedPlayers: state.connectedPlayers,
     eventSequence: state.eventSequence,
     activeSceneId: state.activeSceneId,
@@ -144,9 +162,14 @@ export function useLiveRoom() {
     roomRef.current?.send(MESSAGE.presentScene, { sceneId });
   }, []);
 
-  const adjustHp = useCallback((delta: number) => {
+  const adjustHp = useCallback((characterId: string, delta: number) => {
     setError(null);
-    roomRef.current?.send(MESSAGE.adjustHp, { delta });
+    roomRef.current?.send(MESSAGE.adjustHp, { characterId, delta });
+  }, []);
+
+  const createCharacter = useCallback((command: { name: string; rulesetId: string; maxHp: number }) => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.createCharacter, command);
   }, []);
 
   const createToken = useCallback((command: {
@@ -178,6 +201,7 @@ export function useLiveRoom() {
     clientName,
     roll,
     adjustHp,
+    createCharacter,
     presentScene,
     createToken,
     moveToken,

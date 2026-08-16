@@ -2,9 +2,11 @@ import { randomInt, randomUUID } from "node:crypto";
 import { Room, type Client } from "@colyseus/core";
 import {
   normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
-  type GameEvent, type RecentEvent, type SceneToken, type SessionSnapshot
+  type CharacterRuntime, type GameEvent, type RecentEvent, type SceneToken, type SessionSnapshot
 } from "@utt/domain";
 import {
+  CharacterResourceState,
+  CharacterState,
   EventState,
   LiveRoomState,
   TokenState,
@@ -12,6 +14,7 @@ import {
   SERVER_MESSAGE,
   SESSION_ID,
   type AdjustHpCommand,
+  type CreateCharacterCommand,
   type CreateTokenCommand,
   type JoinOptions,
   type MoveTokenCommand,
@@ -53,6 +56,24 @@ function tokenToState(token: SceneToken): TokenState {
   return state;
 }
 
+function characterToState(runtime: CharacterRuntime): CharacterState {
+  const state = new CharacterState();
+  state.id = runtime.definition.id;
+  state.name = runtime.definition.name;
+  state.rulesetId = runtime.definition.rulesetId;
+  state.schemaVersion = runtime.definition.schemaVersion;
+  for (const resource of runtime.resources) {
+    const resourceState = new CharacterResourceState();
+    resourceState.id = resource.id;
+    resourceState.key = resource.key;
+    resourceState.label = resource.label;
+    resourceState.current = resource.current;
+    resourceState.max = resource.max;
+    state.resources.set(resource.key, resourceState);
+  }
+  return state;
+}
+
 export class VerticalSliceRoom extends Room {
   state = new LiveRoomState();
   private readonly names = new Map<string, string>();
@@ -61,17 +82,16 @@ export class VerticalSliceRoom extends Room {
   async onCreate(): Promise<void> {
     this.maxClients = 12;
     this.state.sessionId = SESSION_ID;
-    this.state.characterName = "Mira Voss";
-    this.state.maxHp = 32;
-    this.state.hp = 32;
     const starterScene = await surrealStore.ensureStarterScene();
     this.state.activeSceneId = starterScene.id;
 
+    await surrealStore.ensureStarterCharacterFromLegacySnapshot(SESSION_ID);
     const snapshot = await surrealStore.loadSnapshot(SESSION_ID);
     if (snapshot) this.restoreSnapshot(snapshot);
+    this.replaceCharacters(await surrealStore.listCharacterRuntimes());
     this.replaceTokens(await surrealStore.listSceneTokens(this.state.activeSceneId));
     this.replaceFog(await surrealStore.getSceneFog(this.state.activeSceneId));
-    console.info(`[room] created ${this.roomId}; restored sequence=${snapshot?.sequence ?? 0}, hp=${this.state.hp}`);
+    console.info(`[room] created ${this.roomId}; restored sequence=${snapshot?.sequence ?? 0}, characters=${this.state.characters.size}`);
 
     this.onMessage(MESSAGE.roll, (client, message: RollCommand) => {
       this.enqueue(client, () => this.handleRoll(client, message));
@@ -81,6 +101,9 @@ export class VerticalSliceRoom extends Room {
     });
     this.onMessage(MESSAGE.presentScene, (client, message: PresentSceneCommand) => {
       this.enqueue(client, () => this.handlePresentScene(client, message));
+    });
+    this.onMessage(MESSAGE.createCharacter, (client, message: CreateCharacterCommand) => {
+      this.enqueue(client, () => this.handleCreateCharacter(client, message));
     });
     this.onMessage(MESSAGE.createToken, (client, message: CreateTokenCommand) => {
       this.enqueue(client, () => this.handleCreateToken(client, message));
@@ -121,6 +144,11 @@ export class VerticalSliceRoom extends Room {
     return this.names.get(client.sessionId) ?? `Player-${client.sessionId.slice(0, 4)}`;
   }
 
+  private replaceCharacters(characters: CharacterRuntime[]): void {
+    this.state.characters.clear();
+    for (const character of characters) this.state.characters.set(character.definition.id, characterToState(character));
+  }
+
   private replaceTokens(tokens: SceneToken[]): void {
     this.state.tokens.clear();
     for (const token of tokens) this.state.tokens.set(token.id, tokenToState(token));
@@ -130,6 +158,13 @@ export class VerticalSliceRoom extends Room {
     this.state.fogEnabled = fog.enabled;
     this.state.fogRevealedCells.clear();
     for (const cell of fog.revealedCells) this.state.fogRevealedCells.push(cell);
+  }
+
+  private async handleCreateCharacter(_client: Client, command: CreateCharacterCommand): Promise<void> {
+    const runtime = await surrealStore.createCharacter({
+      name: command?.name, rulesetId: command?.rulesetId, maxHp: command?.maxHp, rulesetData: {}
+    });
+    this.state.characters.set(runtime.definition.id, characterToState(runtime));
   }
 
   private async handleCreateToken(client: Client, command: CreateTokenCommand): Promise<void> {
@@ -145,7 +180,7 @@ export class VerticalSliceRoom extends Room {
       sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor, at: new Date().toISOString(),
       tokenId, sceneId: command.sceneId, kind, label, x, y, controllerName
     });
-    const snapshot = this.nextSnapshot(event, this.currentRoll(), this.state.hp);
+    const snapshot = this.nextSnapshot(event, this.currentRoll());
     const token = await surrealStore.createTokenWithEvent(
       { tokenId, sceneId: command.sceneId, kind, label, x, y, controllerName }, event, snapshot
     );
@@ -165,7 +200,7 @@ export class VerticalSliceRoom extends Room {
       sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor, at: new Date().toISOString(),
       tokenId: token.id, label: token.label, fromX: token.x, fromY: token.y, x, y
     });
-    const snapshot = this.nextSnapshot(event, this.currentRoll(), this.state.hp);
+    const snapshot = this.nextSnapshot(event, this.currentRoll());
     const moved = await surrealStore.moveTokenWithEvent(token.id, x, y, event, snapshot);
     const liveToken = this.state.tokens.get(moved.id);
     if (liveToken) { liveToken.x = moved.x; liveToken.y = moved.y; }
@@ -202,7 +237,7 @@ export class VerticalSliceRoom extends Room {
       natural: roll.natural,
       modifier: roll.modifier,
       total: roll.total
-    }, this.state.hp);
+    });
     await surrealStore.persist(event, snapshot);
 
     this.state.latestRollSides = roll.sides;
@@ -225,7 +260,7 @@ export class VerticalSliceRoom extends Room {
       sceneName: scene.name
     });
     const [sceneTokens, sceneFog] = await Promise.all([surrealStore.listSceneTokens(scene.id), surrealStore.getSceneFog(scene.id)]);
-    const snapshot = this.nextSnapshot(event, this.currentRoll(), this.state.hp, scene.id);
+    const snapshot = this.nextSnapshot(event, this.currentRoll(), scene.id);
     await surrealStore.persist(event, snapshot);
     this.state.activeSceneId = scene.id;
     this.replaceTokens(sceneTokens);
@@ -234,21 +269,19 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleHp(client: Client, command: AdjustHpCommand): Promise<void> {
+    if (typeof command?.characterId !== "string" || !command.characterId) throw new Error("characterId is required");
+    const character = this.state.characters.get(command.characterId);
+    if (!character) throw new Error("character not found");
+    const hp = character.resources.get("hp");
+    if (!hp) throw new Error("character has no hp resource");
     const sequence = this.state.eventSequence + 1;
     const { event, nextHp } = createHpEvent({
-      sessionId: SESSION_ID,
-      sequence,
-      actor: this.actorFor(client),
-      at: new Date().toISOString(),
-      currentHp: this.state.hp,
-      maxHp: this.state.maxHp,
-      delta: command?.delta
+      sessionId: SESSION_ID, sequence, actor: this.actorFor(client), at: new Date().toISOString(),
+      characterId: character.id, characterName: character.name, currentHp: hp.current, maxHp: hp.max, delta: command?.delta
     });
-
-    const snapshot = this.nextSnapshot(event, this.currentRoll(), nextHp);
-    await surrealStore.persist(event, snapshot);
-
-    this.state.hp = nextHp;
+    const snapshot = this.nextSnapshot(event, this.currentRoll());
+    const updated = await surrealStore.updateCharacterResourceWithEvent(character.id, "hp", nextHp, event, snapshot);
+    hp.current = updated.current;
     this.applyAcceptedEvent(event);
   }
 
@@ -288,26 +321,16 @@ export class VerticalSliceRoom extends Room {
   private nextSnapshot(
     event: GameEvent,
     latestRoll: SessionSnapshot["latestRoll"],
-    hp: number,
     activeSceneId = this.state.activeSceneId
   ): SessionSnapshot {
     return {
-      sessionId: SESSION_ID,
-      sequence: event.sequence,
-      characterName: this.state.characterName,
-      activeSceneId,
-      hp,
-      maxHp: this.state.maxHp,
-      latestRoll,
+      sessionId: SESSION_ID, sequence: event.sequence, activeSceneId, latestRoll,
       recentEvents: this.recentEventsWith(event)
     };
   }
 
   private restoreSnapshot(snapshot: SessionSnapshot): void {
-    this.state.characterName = snapshot.characterName;
     this.state.activeSceneId = snapshot.activeSceneId;
-    this.state.hp = snapshot.hp;
-    this.state.maxHp = snapshot.maxHp;
     this.state.eventSequence = snapshot.sequence;
     if (snapshot.latestRoll) {
       this.state.latestRollSides = snapshot.latestRoll.sides;
