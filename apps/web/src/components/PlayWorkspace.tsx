@@ -70,6 +70,8 @@ function VirtualTable({ state, clientName, onRoll, onAdjustHp, onMoveToken, show
         selectedHotspotId={null}
         selectedHotspotLore={null}
         onTokenMove={onMoveToken}
+        fogEnabled={state.fogEnabled}
+        fogRevealedCells={state.fogRevealedCells}
       />
       {showHud ? <>
         <FreeformSurface items={items} storageKey="utt.play.table.freeform.v1" resetToken={resetToken} overlay className="play-hud-freeform" />

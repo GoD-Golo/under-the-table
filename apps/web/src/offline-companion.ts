@@ -25,6 +25,8 @@ function offlineState(seed: LiveViewState | null, copied = false): LiveViewState
     eventSequence: copied ? 1 : 0,
     activeSceneId: "",
     tokens: [],
+    fogEnabled: false,
+    fogRevealedCells: [],
     latestRoll: null,
     events: copied ? [{ sequence: 1, kind: "offline", actor: "Local", summary: "Copied current campaign character state for offline play", at: now }] : []
   };

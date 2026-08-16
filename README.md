@@ -47,7 +47,14 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - Companion can use connected campaign state or explicit browser-local offline state;
 - mobile Virtual Table uses a compact HUD drawer so the map remains visible.
 
-Walls/doors, fog/vision, initiative/targeting, travel rules, hex-map generation, auth/roles, secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
+**Vertical Slice 003.7** adds a deliberately small fog placeholder:
+
+- Director toggles fog and reveals/coats fixed cells on the active scene;
+- fog state is live-synchronized and persists across restart;
+- covered Play cells suppress token rendering/interaction;
+- this is explicitly visual UX, not secure player-secret delivery.
+
+Walls/doors, dynamic vision/LOS, initiative/targeting, travel rules, hex-map generation, auth/roles, secure visibility/secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
 
 ## Development architecture
 
@@ -67,6 +74,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-003.md` — authoritative token foundation evidence
 - `docs/VERTICAL-SLICE-003-5.md` — freeform workspace and interaction stabilization evidence
 - `docs/VERTICAL-SLICE-003-6.md` — unified Virtual Table / Companion evidence
+- `docs/VERTICAL-SLICE-003-7.md` — simple fog placeholder evidence
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands

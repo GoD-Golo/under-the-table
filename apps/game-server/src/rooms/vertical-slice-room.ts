@@ -16,7 +16,9 @@ import {
   type JoinOptions,
   type MoveTokenCommand,
   type PresentSceneCommand,
-  type RollCommand
+  type RollCommand,
+  type SetFogCellCommand,
+  type SetFogEnabledCommand
 } from "@utt/protocol";
 import { surrealStore } from "../persistence/surreal-store.js";
 import { createHpEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "../session-logic.js";
@@ -68,6 +70,7 @@ export class VerticalSliceRoom extends Room {
     const snapshot = await surrealStore.loadSnapshot(SESSION_ID);
     if (snapshot) this.restoreSnapshot(snapshot);
     this.replaceTokens(await surrealStore.listSceneTokens(this.state.activeSceneId));
+    this.replaceFog(await surrealStore.getSceneFog(this.state.activeSceneId));
     console.info(`[room] created ${this.roomId}; restored sequence=${snapshot?.sequence ?? 0}, hp=${this.state.hp}`);
 
     this.onMessage(MESSAGE.roll, (client, message: RollCommand) => {
@@ -84,6 +87,12 @@ export class VerticalSliceRoom extends Room {
     });
     this.onMessage(MESSAGE.moveToken, (client, message: MoveTokenCommand) => {
       this.enqueue(client, () => this.handleMoveToken(client, message));
+    });
+    this.onMessage(MESSAGE.setFogEnabled, (client, message: SetFogEnabledCommand) => {
+      this.enqueue(client, () => this.handleSetFogEnabled(client, message));
+    });
+    this.onMessage(MESSAGE.setFogCell, (client, message: SetFogCellCommand) => {
+      this.enqueue(client, () => this.handleSetFogCell(client, message));
     });
   }
 
@@ -115,6 +124,12 @@ export class VerticalSliceRoom extends Room {
   private replaceTokens(tokens: SceneToken[]): void {
     this.state.tokens.clear();
     for (const token of tokens) this.state.tokens.set(token.id, tokenToState(token));
+  }
+
+  private replaceFog(fog: { enabled: boolean; revealedCells: string[] }): void {
+    this.state.fogEnabled = fog.enabled;
+    this.state.fogRevealedCells.clear();
+    for (const cell of fog.revealedCells) this.state.fogRevealedCells.push(cell);
   }
 
   private async handleCreateToken(client: Client, command: CreateTokenCommand): Promise<void> {
@@ -157,6 +172,20 @@ export class VerticalSliceRoom extends Room {
     this.applyAcceptedEvent(event);
   }
 
+  private async handleSetFogEnabled(_client: Client, command: SetFogEnabledCommand): Promise<void> {
+    if (typeof command?.sceneId !== "string" || command.sceneId !== this.state.activeSceneId) throw new Error("fog can only be edited on the active scene");
+    if (typeof command.enabled !== "boolean") throw new Error("fog enabled must be boolean");
+    const fog = await surrealStore.setSceneFogEnabled(command.sceneId, command.enabled);
+    this.replaceFog(fog);
+  }
+
+  private async handleSetFogCell(_client: Client, command: SetFogCellCommand): Promise<void> {
+    if (typeof command?.sceneId !== "string" || command.sceneId !== this.state.activeSceneId) throw new Error("fog can only be edited on the active scene");
+    if (typeof command.revealed !== "boolean") throw new Error("fog revealed must be boolean");
+    const fog = await surrealStore.setSceneFogCell(command.sceneId, command.column, command.row, command.revealed);
+    this.replaceFog(fog);
+  }
+
   private async handleRoll(client: Client, command: RollCommand): Promise<void> {
     const sequence = this.state.eventSequence + 1;
     const { event, roll } = createRollEvent({
@@ -195,11 +224,12 @@ export class VerticalSliceRoom extends Room {
       sceneId: scene.id,
       sceneName: scene.name
     });
-    const sceneTokens = await surrealStore.listSceneTokens(scene.id);
+    const [sceneTokens, sceneFog] = await Promise.all([surrealStore.listSceneTokens(scene.id), surrealStore.getSceneFog(scene.id)]);
     const snapshot = this.nextSnapshot(event, this.currentRoll(), this.state.hp, scene.id);
     await surrealStore.persist(event, snapshot);
     this.state.activeSceneId = scene.id;
     this.replaceTokens(sceneTokens);
+    this.replaceFog(sceneFog);
     this.applyAcceptedEvent(event);
   }
 

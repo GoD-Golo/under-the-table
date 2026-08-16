@@ -2,6 +2,8 @@ export const STARTER_SCENE_ID = "table-landing";
 
 export type SceneKind = "blank" | "image" | "combat_test";
 export type GridKind = "none" | "square" | "hex";
+export const FOG_COLUMNS = 12;
+export const FOG_ROWS = 8;
 
 export interface SceneGrid {
   kind: GridKind;
@@ -28,6 +30,13 @@ export interface Scene {
   backgroundHeight: number;
   grid: SceneGrid;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface SceneFog {
+  sceneId: string;
+  enabled: boolean;
+  revealedCells: string[];
   updatedAt: string;
 }
 
@@ -72,4 +81,12 @@ export function normalizeLoreSummary(value: unknown): string {
   if (value == null || value === "") return "";
   if (typeof value !== "string") throw new Error("lore summary must be text");
   return value.trim().slice(0, 2000);
+}
+
+export function normalizeFogCell(column: unknown, row: unknown): string {
+  const col = Number(column);
+  const parsedRow = Number(row);
+  if (!Number.isInteger(col) || col < 0 || col >= FOG_COLUMNS) throw new Error(`fog column must be between 0 and ${FOG_COLUMNS - 1}`);
+  if (!Number.isInteger(parsedRow) || parsedRow < 0 || parsedRow >= FOG_ROWS) throw new Error(`fog row must be between 0 and ${FOG_ROWS - 1}`);
+  return `${col}:${parsedRow}`;
 }

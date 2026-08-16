@@ -30,6 +30,8 @@ export class LiveRoomState extends Schema {
   @type("number") latestRollNatural = 0;
   @type("number") latestRollModifier = 0;
   @type("number") latestRollTotal = 0;
+  @type("boolean") fogEnabled = false;
+  @type(["string"]) fogRevealedCells = new ArraySchema<string>();
   @type([EventState]) events = new ArraySchema<EventState>();
   @type({ map: TokenState }) tokens = new MapSchema<TokenState>();
 }

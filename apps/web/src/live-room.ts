@@ -27,6 +27,8 @@ export interface LiveViewState {
   eventSequence: number;
   activeSceneId: string;
   tokens: LiveTokenView[];
+  fogEnabled: boolean;
+  fogRevealedCells: string[];
   latestRoll: { sides: number; natural: number; modifier: number; total: number } | null;
   events: Array<{ sequence: number; kind: string; actor: string; summary: string; at: string }>;
 }
@@ -44,6 +46,8 @@ function snapshot(state: LiveRoomState): LiveViewState {
       id: token.id, sceneId: token.sceneId, kind: token.kind as LiveTokenView["kind"], label: token.label,
       x: token.x, y: token.y, controllerName: token.controllerName || null
     })),
+    fogEnabled: state.fogEnabled,
+    fogRevealedCells: Array.from(state.fogRevealedCells),
     latestRoll: state.latestRollSides > 0 ? {
       sides: state.latestRollSides,
       natural: state.latestRollNatural,
@@ -157,6 +161,16 @@ export function useLiveRoom() {
     roomRef.current?.send(MESSAGE.moveToken, { tokenId, x, y });
   }, []);
 
+  const setFogEnabled = useCallback((sceneId: string, enabled: boolean) => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.setFogEnabled, { sceneId, enabled });
+  }, []);
+
+  const setFogCell = useCallback((sceneId: string, column: number, row: number, revealed: boolean) => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.setFogCell, { sceneId, column, row, revealed });
+  }, []);
+
   return {
     state,
     status,
@@ -167,6 +181,8 @@ export function useLiveRoom() {
     presentScene,
     createToken,
     moveToken,
+    setFogEnabled,
+    setFogCell,
     reconnect: () => setAttempt((value) => value + 1)
   };
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { RecordId, Surreal, Table } from "surrealdb";
 import {
   STARTER_SCENE_ID,
+  normalizeFogCell,
   normalizeGrid,
   normalizeHotspotCoordinate,
   normalizeLoreSummary,
@@ -13,6 +14,7 @@ import {
   type GameEvent,
   type RecentEvent,
   type Scene,
+  type SceneFog,
   type SceneHotspot,
   type SceneToken,
   type SessionSnapshot,
@@ -62,6 +64,15 @@ interface HotspotRecord {
   linked_scene_id?: string | undefined;
   linked_entity_id?: string | undefined;
   created_at: string;
+  updated_at: string;
+}
+
+
+interface FogRecord {
+  [key: string]: unknown;
+  scene_id: string;
+  enabled: boolean;
+  revealed_cells: string[];
   updated_at: string;
 }
 
@@ -144,6 +155,13 @@ DEFINE FIELD IF NOT EXISTS controller_name ON TABLE scene_token TYPE option<stri
 DEFINE FIELD IF NOT EXISTS created_at ON TABLE scene_token TYPE string;
 DEFINE FIELD IF NOT EXISTS updated_at ON TABLE scene_token TYPE string;
 DEFINE INDEX IF NOT EXISTS scene_token_scene ON TABLE scene_token FIELDS scene_id;
+
+DEFINE TABLE IF NOT EXISTS scene_fog SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS scene_id ON TABLE scene_fog TYPE string;
+DEFINE FIELD IF NOT EXISTS enabled ON TABLE scene_fog TYPE bool;
+DEFINE FIELD IF NOT EXISTS revealed_cells ON TABLE scene_fog TYPE array<string>;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE scene_fog TYPE string;
+DEFINE INDEX IF NOT EXISTS scene_fog_scene ON TABLE scene_fog FIELDS scene_id UNIQUE;
 COMMIT TRANSACTION;
 `;
 
@@ -228,6 +246,14 @@ function mapToken(record: TokenRecord): SceneToken {
     createdAt: record.created_at,
     updatedAt: record.updated_at
   };
+}
+
+function mapFog(record: FogRecord): SceneFog {
+  return { sceneId: record.scene_id, enabled: record.enabled, revealedCells: [...record.revealed_cells], updatedAt: record.updated_at };
+}
+
+function emptyFog(sceneId: string): SceneFog {
+  return { sceneId, enabled: false, revealedCells: [], updatedAt: new Date(0).toISOString() };
 }
 
 function defaultGridFor(kind: Scene["kind"]): Scene["grid"] {
@@ -365,6 +391,35 @@ export class SurrealStore {
       { sceneId }
     );
     return (records ?? []).map(mapToken);
+  }
+
+  async getSceneFog(sceneId: string): Promise<SceneFog> {
+    await this.connect();
+    const record = await this.db.select<FogRecord>(new RecordId("scene_fog", sceneId));
+    return record ? mapFog(record) : emptyFog(sceneId);
+  }
+
+  async setSceneFogEnabled(sceneId: string, enabled: boolean): Promise<SceneFog> {
+    await this.connect();
+    if (!await this.getScene(sceneId)) throw new Error("scene not found");
+    const current = await this.getSceneFog(sceneId);
+    const record = await this.db.upsert<FogRecord>(new RecordId("scene_fog", sceneId)).content({
+      scene_id: sceneId, enabled: Boolean(enabled), revealed_cells: current.revealedCells, updated_at: new Date().toISOString()
+    });
+    return mapFog(record);
+  }
+
+  async setSceneFogCell(sceneId: string, column: unknown, row: unknown, revealed: boolean): Promise<SceneFog> {
+    await this.connect();
+    if (!await this.getScene(sceneId)) throw new Error("scene not found");
+    const key = normalizeFogCell(column, row);
+    const current = await this.getSceneFog(sceneId);
+    const cells = new Set(current.revealedCells);
+    if (revealed) cells.add(key); else cells.delete(key);
+    const record = await this.db.upsert<FogRecord>(new RecordId("scene_fog", sceneId)).content({
+      scene_id: sceneId, enabled: current.enabled, revealed_cells: [...cells].sort(), updated_at: new Date().toISOString()
+    });
+    return mapFog(record);
   }
 
   async createScene(input: CreateSceneInput): Promise<Scene> {
