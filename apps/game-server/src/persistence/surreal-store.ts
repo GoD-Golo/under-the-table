@@ -773,7 +773,12 @@ export class SurrealStore {
       if (typeof item !== "object" || item === null || Array.isArray(item)) return [];
       const entry = item as Record<string, unknown>;
       if (typeof entry.id !== "string" || typeof entry.label !== "string" || !Number.isInteger(Number(entry.score))) return [];
-      return [{ id: entry.id, label: entry.label, score: Number(entry.score), characterId: typeof entry.characterId === "string" ? entry.characterId : null }];
+      return [{
+        id: entry.id, label: entry.label, score: Number(entry.score), characterId: typeof entry.characterId === "string" ? entry.characterId : null,
+        armorClass: Number(entry.armorClass) > 0 ? Number(entry.armorClass) : null,
+        currentHp: Number.isInteger(Number(entry.currentHp)) && Number(entry.maxHp) > 0 ? Math.max(0, Number(entry.currentHp)) : null,
+        maxHp: Number(entry.maxHp) > 0 ? Number(entry.maxHp) : null
+      }];
     });
     return { round, activeIndex: entries.length ? Math.max(0, Math.min(activeIndex, entries.length - 1)) : -1, entries };
   }

@@ -42,6 +42,9 @@ export class InitiativeEntryState extends Schema {
   @type("string") label = "";
   @type("number") score = 0;
   @type("string") characterId = "";
+  @type("number") armorClass = 0;
+  @type("number") currentHp = 0;
+  @type("number") maxHp = 0;
 }
 
 export class LiveRoomState extends Schema {

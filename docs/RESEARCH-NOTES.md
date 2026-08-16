@@ -69,3 +69,25 @@ Sources:
 - https://www.dndbeyond.com/sources/dnd/br-2024/creating-a-character
 - https://www.dndbeyond.com/sources/dnd/br-2024/character-origins
 - https://www.dndbeyond.com/sources/dnd/br-2024/playing-the-game
+
+## D&D 2024 checks and basic weapon combat
+
+VS006 extends the playable subset using the official D&D Beyond 2024 Basic Rules rather than inventing combat math in the UI.
+
+Implemented from those rules:
+
+- a saving throw adds the associated ability modifier and proficiency bonus when the character is proficient in that save;
+- a skill check uses its associated ability modifier and adds proficiency bonus for a selected skill proficiency;
+- passive Perception uses 10 plus the Perception check modifier for this basic subset;
+- weapon proficiency adds proficiency bonus to the attack roll;
+- an attack roll is compared with Armor Class; natural 1 misses and natural 20 hits critically;
+- weapon damage can add the same ability modifier used for the attack;
+- a critical hit rolls the attack's damage dice twice while static modifiers are not doubled.
+
+UTT does not yet automate Weapon Mastery, cover/range, advantage/disadvantage, feats, class attack features or spell attacks. Those belong to the later content/action/effect model.
+
+Sources:
+- https://www.dndbeyond.com/sources/dnd/br-2024/playing-the-game
+- https://www.dndbeyond.com/sources/dnd/br-2024/equipment
+- https://www.dndbeyond.com/sources/dnd/br-2024/character-classes
+- https://www.dndbeyond.com/sources/dnd/br-2024/creating-a-character

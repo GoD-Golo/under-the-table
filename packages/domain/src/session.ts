@@ -1,4 +1,4 @@
-export type GameEventKind = "roll" | "hp" | "scene_presented" | "token_created" | "token_moved" | "initiative";
+export type GameEventKind = "roll" | "hp" | "scene_presented" | "token_created" | "token_moved" | "initiative" | "attack";
 
 export interface GameEvent {
   sequence: number;
@@ -24,6 +24,9 @@ export interface InitiativeEntry {
   label: string;
   score: number;
   characterId: string | null;
+  armorClass: number | null;
+  currentHp: number | null;
+  maxHp: number | null;
 }
 
 export interface InitiativeState {

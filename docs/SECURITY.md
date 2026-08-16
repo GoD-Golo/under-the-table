@@ -1,6 +1,6 @@
 # Development security posture
 
-The current Vertical Slice 001 through 005 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
+The current Vertical Slice 001 through 006 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
 
 Compensating development controls:
 
@@ -16,7 +16,7 @@ Compensating development controls:
 
 ## Known security limitation
 
-All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation, fog reveal and uploads. They can also create/edit characters, mutate any character resource, and roll/advance/clear initiative because authenticated ownership and table roles are not implemented yet. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. The VS003.7 fog overlay is not a secrecy boundary because scene assets still reach the browser. DM-secret notes/visibility and real ownership must not rely on client-side masking or provisional client names; identity and authorization need their own design and enforcement.
+All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation, fog reveal and uploads. They can also create/edit characters, mutate any character resource, roll/advance/clear initiative, quick-add NPC combatants and issue basic attacks for any eligible active character because authenticated ownership and table roles are not implemented yet. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. The VS003.7 fog overlay is not a secrecy boundary because scene assets still reach the browser. DM-secret notes/visibility and real ownership must not rely on client-side masking or provisional client names; identity and authorization need their own design and enforcement.
 
 This environment is suitable for a private development preview, not public production.
 

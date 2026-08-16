@@ -553,3 +553,60 @@ button { color: inherit; }
   .ability-editor-grid { grid-template-columns: repeat(3, 1fr); }
   .character-library-list { grid-template-columns: 1fr; }
 }
+
+/* VS006 near-MVP checks + basic combat loop */
+.check-tabs { display:flex; gap:6px; margin-bottom:10px; }
+.check-tabs button { flex:1; border:1px solid var(--line); background:rgba(255,255,255,.035); color:var(--muted); border-radius:999px; padding:6px 8px; text-transform:capitalize; }
+.check-tabs button.active { background:rgba(255,255,255,.11); color:var(--text); border-color:rgba(255,255,255,.24); }
+.save-check-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-bottom:10px; }
+.check-roll,.skill-roll,.attack-action { border:1px solid var(--line); background:rgba(7,10,15,.7); color:var(--text); border-radius:10px; }
+.check-roll { display:grid; grid-template-columns:1fr auto; grid-template-rows:auto auto; text-align:left; padding:8px; }
+.check-roll small { grid-column:1/-1; color:var(--muted); font-size:9px; letter-spacing:.08em; }
+.check-roll.proficient,.skill-roll.proficient { border-color:rgba(214,178,93,.48); background:rgba(214,178,93,.08); }
+.skill-check-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; max-height:205px; overflow:auto; padding-right:3px; margin-bottom:8px; }
+.skill-roll { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:7px; padding:7px 8px; text-align:left; text-transform:capitalize; }
+.skill-roll small { color:var(--muted); font-size:9px; }
+.skill-roll strong { font-variant-numeric:tabular-nums; }
+
+.save-proficiency-line { display:flex; align-items:center; gap:8px; margin-top:12px; color:var(--muted); font-size:12px; }
+.save-proficiency-line strong { color:var(--text); border:1px solid var(--line); border-radius:999px; padding:4px 8px; }
+.skill-builder-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.skill-toggle { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:7px; padding:8px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.025); }
+.skill-toggle.active { border-color:rgba(214,178,93,.45); background:rgba(214,178,93,.07); }
+.skill-toggle small { color:var(--muted); }
+.weapon-template-row { display:flex; gap:8px; margin-bottom:10px; }
+.weapon-template-row select { flex:1; }
+.attack-builder-list { display:grid; gap:8px; }
+.attack-builder-row { display:grid; grid-template-columns:minmax(130px,1.5fr) 82px 100px 58px 64px minmax(100px,1fr) 92px minmax(130px,1fr) auto; gap:6px; align-items:center; padding:8px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.025); }
+.attack-builder-row input,.attack-builder-row select { min-width:0; }
+.inline-check { display:flex!important; flex-direction:row!important; gap:5px!important; align-items:center; font-size:11px; color:var(--muted); }
+.inline-check input { width:auto!important; }
+
+.attack-action-list { display:grid; gap:7px; margin-top:10px; }
+.attack-action { width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 10px; text-align:left; }
+.attack-action:hover:not(:disabled) { border-color:rgba(214,178,93,.5); background:rgba(214,178,93,.08); }
+.attack-action:disabled { opacity:.45; }
+.attack-action div,.attack-action span { display:grid; gap:2px; }
+.attack-action span { text-align:right; }
+.attack-action small { color:var(--muted); font-size:10px; }
+.initiative-quick-add { grid-template-columns:minmax(90px,1fr) 44px 44px 52px; }
+.initiative-quick-add .game-button { grid-column:1/-1; width:100%; }
+.initiative-field-hints { display:grid; grid-template-columns:minmax(90px,1fr) 44px 44px 52px; gap:6px; margin:-5px 0 7px; color:var(--muted); font-size:9px; text-transform:uppercase; letter-spacing:.07em; }
+.initiative-field-hints span:last-child { display:none; }
+.initiative-entry > div { min-width:0; display:grid; gap:1px; }
+.initiative-entry > div small { color:var(--muted); font-size:9px; white-space:nowrap; }
+.event-icon.attack { color:#f0be63; }
+
+@media (max-width: 900px) {
+  .skill-builder-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .attack-builder-row { grid-template-columns:1fr 80px 95px 55px 60px; }
+  .attack-builder-row > :nth-child(n+6) { grid-column:auto / span 1; }
+}
+@media (max-width: 620px) {
+  .skill-builder-grid { grid-template-columns:1fr; }
+  .attack-builder-row { grid-template-columns:1fr 1fr; }
+  .attack-builder-row > * { min-width:0; }
+  .attack-builder-row > :first-child,.attack-builder-row > :nth-child(6),.attack-builder-row > :nth-child(8) { grid-column:1/-1; }
+  .skill-check-list { grid-template-columns:1fr; max-height:260px; }
+  .initiative-quick-add,.initiative-field-hints { grid-template-columns:minmax(80px,1fr) 42px 42px 48px; }
+}

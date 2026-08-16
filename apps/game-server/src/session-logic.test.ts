@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createHpEvent, createInitiativeAdvancedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "./session-logic.js";
+import { createBasicAttackEvent, createHpEvent, createInitiativeAdvancedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent, resolveBasicAttack } from "./session-logic.js";
 
 const base = { sessionId: "test", sequence: 4, actor: "Ada", at: "2026-08-16T00:00:00.000Z" };
 
@@ -31,6 +31,20 @@ describe("authoritative session transitions", () => {
     expect(placed.payload).toMatchObject({ tokenId: "t1", controllerName: "Ada" });
     expect(moved.kind).toBe("token_moved");
     expect(moved.payload).toMatchObject({ fromX: .2, x: .4, y: .5 });
+  });
+
+  it("resolves basic attacks with server RNG, AC and critical damage dice", () => {
+    const values = [20, 6, 4];
+    const resolution = resolveBasicAttack({ attackModifier: 5, targetArmorClass: 18, damageDiceCount: 1, damageDie: 8, damageModifier: 3 }, () => values.shift() ?? 1);
+    expect(resolution).toMatchObject({ natural: 20, total: 25, hit: true, critical: true, damage: 13 });
+    expect(resolution.damageRolls).toEqual([6, 4]);
+    const event = createBasicAttackEvent({ ...base, attackerCharacterId: "mira", attackerName: "Mira", attackId: "sword", attackName: "Longsword", targetEntryId: "goblin", targetCharacterId: null, targetName: "Goblin", damageType: "slashing", resolution, previousHp: 14, nextHp: 1 });
+    expect(event.kind).toBe("attack"); expect(event.summary).toContain("critical hit"); expect(event.payload).toMatchObject({ previousHp: 14, nextHp: 1 });
+  });
+
+  it("treats natural 1 as a miss even when the total reaches AC", () => {
+    const resolution = resolveBasicAttack({ attackModifier: 20, targetArmorClass: 10, damageDiceCount: 1, damageDie: 6, damageModifier: 4 }, () => 1);
+    expect(resolution.hit).toBe(false); expect(resolution.damage).toBe(0); expect(resolution.damageRolls).toEqual([]);
   });
 
   it("creates initiative roll and advance events", () => {

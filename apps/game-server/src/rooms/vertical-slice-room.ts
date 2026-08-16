@@ -4,7 +4,7 @@ import {
   normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
   type CharacterRuntime, type GameEvent, type InitiativeState, type RecentEvent, type SceneToken, type SessionSnapshot
 } from "@utt/domain";
-import { DND2024_RULESET_ID, abilityModifier, normalizeDnd2024Data } from "@utt/rules-dnd2024";
+import { DND2024_RULESET_ID, abilityModifier, attackModifier, normalizeDnd2024Data } from "@utt/rules-dnd2024";
 import {
   CharacterResourceState,
   CharacterState,
@@ -21,6 +21,7 @@ import {
   type JoinOptions,
   type MoveTokenCommand,
   type PresentSceneCommand,
+  type PerformBasicAttackCommand,
   type RollCommand,
   type RollInitiativeCommand,
   type SetFogCellCommand,
@@ -28,7 +29,7 @@ import {
   type UpdateCharacterCommand
 } from "@utt/protocol";
 import { surrealStore } from "../persistence/surreal-store.js";
-import { createHpEvent, createInitiativeAdvancedEvent, createInitiativeClearedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "../session-logic.js";
+import { createBasicAttackEvent, createHpEvent, createInitiativeAdvancedEvent, createInitiativeClearedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent, resolveBasicAttack } from "../session-logic.js";
 
 const RECENT_EVENT_LIMIT = 12;
 
@@ -85,6 +86,9 @@ function initiativeEntryToState(entry: InitiativeState["entries"][number]): Init
   state.label = entry.label;
   state.score = entry.score;
   state.characterId = entry.characterId ?? "";
+  state.armorClass = entry.armorClass ?? 0;
+  state.currentHp = entry.currentHp ?? 0;
+  state.maxHp = entry.maxHp ?? 0;
   return state;
 }
 
@@ -130,6 +134,9 @@ export class VerticalSliceRoom extends Room {
     });
     this.onMessage(MESSAGE.clearInitiative, (client) => {
       this.enqueue(client, () => this.handleClearInitiative(client));
+    });
+    this.onMessage(MESSAGE.performBasicAttack, (client, message: PerformBasicAttackCommand) => {
+      this.enqueue(client, () => this.handlePerformBasicAttack(client, message));
     });
     this.onMessage(MESSAGE.createToken, (client, message: CreateTokenCommand) => {
       this.enqueue(client, () => this.handleCreateToken(client, message));
@@ -198,7 +205,10 @@ export class VerticalSliceRoom extends Room {
       round: this.state.initiativeRound,
       activeIndex: this.state.initiativeActiveIndex,
       entries: Array.from(this.state.initiativeEntries).map((entry) => ({
-        id: entry.id, label: entry.label, score: entry.score, characterId: entry.characterId || null
+        id: entry.id, label: entry.label, score: entry.score, characterId: entry.characterId || null,
+        armorClass: entry.armorClass > 0 ? entry.armorClass : null,
+        currentHp: entry.maxHp > 0 ? entry.currentHp : null,
+        maxHp: entry.maxHp > 0 ? entry.maxHp : null
       }))
     };
   }
@@ -241,13 +251,22 @@ export class VerticalSliceRoom extends Room {
       if (!Number.isInteger(modifier) || modifier < -50 || modifier > 50) throw new Error("initiative modifier must be an integer between -50 and 50");
     }
     if (!label) throw new Error("initiative label is required");
+    const npcArmorClass = Number(command?.armorClass ?? 10);
+    const npcMaxHp = Number(command?.maxHp ?? 10);
+    if (!characterId && (!Number.isInteger(npcArmorClass) || npcArmorClass < 1 || npcArmorClass > 99)) throw new Error("NPC armor class must be 1-99");
+    if (!characterId && (!Number.isInteger(npcMaxHp) || npcMaxHp < 1 || npcMaxHp > 9999)) throw new Error("NPC max HP must be 1-9999");
 
     const natural = randomInt(1, 21);
     const total = natural + modifier;
     const current = this.currentInitiative();
     const activeId = current.entries[current.activeIndex]?.id ?? null;
     const existing = characterId ? current.entries.find((entry) => entry.characterId === characterId) : undefined;
-    const entry = { id: existing?.id ?? randomUUID(), label, score: total, characterId };
+    const entry = {
+      id: existing?.id ?? randomUUID(), label, score: total, characterId,
+      armorClass: characterId ? null : (existing?.armorClass ?? npcArmorClass),
+      currentHp: characterId ? null : (existing?.currentHp ?? npcMaxHp),
+      maxHp: characterId ? null : (existing?.maxHp ?? npcMaxHp)
+    };
     const entries = existing ? current.entries.map((item) => item.id === existing.id ? entry : item) : [...current.entries, entry];
     entries.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
     const initiative: InitiativeState = {
@@ -266,6 +285,69 @@ export class VerticalSliceRoom extends Room {
     this.state.latestRollModifier = modifier;
     this.state.latestRollTotal = total;
     this.replaceInitiative(initiative);
+    this.applyAcceptedEvent(event);
+  }
+
+  private async handlePerformBasicAttack(client: Client, command: PerformBasicAttackCommand): Promise<void> {
+    if (typeof command?.attackerCharacterId !== "string" || !command.attackerCharacterId) throw new Error("attackerCharacterId is required");
+    if (typeof command?.attackId !== "string" || !command.attackId) throw new Error("attackId is required");
+    if (typeof command?.targetEntryId !== "string" || !command.targetEntryId) throw new Error("targetEntryId is required");
+    const attacker = this.state.characters.get(command.attackerCharacterId);
+    if (!attacker || attacker.rulesetId !== DND2024_RULESET_ID) throw new Error("D&D 2024 attacker not found");
+    const attackerData = normalizeDnd2024Data(JSON.parse(attacker.rulesetDataJson));
+    const attack = attackerData.attacks.find((item) => item.id === command.attackId);
+    if (!attack) throw new Error("attack not found on character");
+
+    const initiative = this.currentInitiative();
+    if (!initiative.entries.length || initiative.activeIndex < 0) throw new Error("combat initiative is not active");
+    const active = initiative.entries[initiative.activeIndex];
+    if (!active || active.characterId !== attacker.id) throw new Error("it is not this character's turn");
+    const target = initiative.entries.find((entry) => entry.id === command.targetEntryId);
+    if (!target || target.id === active.id) throw new Error("valid target is required");
+
+    let targetArmorClass: number;
+    let previousHp: number;
+    let targetMaxHp: number;
+    let targetCharacterState: CharacterState | undefined;
+    if (target.characterId) {
+      targetCharacterState = this.state.characters.get(target.characterId);
+      if (!targetCharacterState || targetCharacterState.rulesetId !== DND2024_RULESET_ID) throw new Error("target character is unavailable");
+      const targetData = normalizeDnd2024Data(JSON.parse(targetCharacterState.rulesetDataJson));
+      const hp = targetCharacterState.resources.get("hp");
+      if (!hp) throw new Error("target character has no HP resource");
+      targetArmorClass = targetData.armorClass; previousHp = hp.current; targetMaxHp = hp.max;
+    } else {
+      if (target.armorClass === null || target.currentHp === null || target.maxHp === null) throw new Error("NPC target needs AC and HP");
+      targetArmorClass = target.armorClass; previousHp = target.currentHp; targetMaxHp = target.maxHp;
+    }
+
+    const damageModifier = attack.addAbilityModifier ? abilityModifier(attackerData.abilities[attack.ability]) : 0;
+    const resolution = resolveBasicAttack({
+      attackModifier: attackModifier(attackerData, attack), targetArmorClass, damageDiceCount: attack.damageDiceCount,
+      damageDie: attack.damageDie, damageModifier
+    }, randomInt);
+    const nextHp = Math.max(0, Math.min(targetMaxHp, previousHp - resolution.damage));
+    const nextInitiative: InitiativeState = target.characterId ? initiative : {
+      ...initiative, entries: initiative.entries.map((entry) => entry.id === target.id ? { ...entry, currentHp: nextHp } : entry)
+    };
+    const event = createBasicAttackEvent({
+      sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor: this.actorFor(client), at: new Date().toISOString(),
+      attackerCharacterId: attacker.id, attackerName: attacker.name, attackId: attack.id, attackName: attack.name,
+      targetEntryId: target.id, targetCharacterId: target.characterId, targetName: target.label, damageType: attack.damageType,
+      resolution, previousHp, nextHp
+    });
+    const latestRoll = { sides: 20, natural: resolution.natural, modifier: resolution.attackModifier, total: resolution.total };
+    const snapshot = this.nextSnapshot(event, latestRoll, this.state.activeSceneId, nextInitiative);
+    if (target.characterId && resolution.damage > 0) {
+      const resource = await surrealStore.updateCharacterResourceWithEvent(target.characterId, "hp", nextHp, event, snapshot);
+      const hpState = targetCharacterState?.resources.get("hp");
+      if (hpState) hpState.current = resource.current;
+    } else {
+      await surrealStore.persist(event, snapshot);
+    }
+    this.state.latestRollSides = 20; this.state.latestRollNatural = resolution.natural;
+    this.state.latestRollModifier = resolution.attackModifier; this.state.latestRollTotal = resolution.total;
+    this.replaceInitiative(nextInitiative);
     this.applyAcceptedEvent(event);
   }
 
