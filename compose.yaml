@@ -1,0 +1,92 @@
+name: utt-next
+
+services:
+  surreal-init:
+    image: alpine:3.22
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 65532:65532 /data"]
+    volumes:
+      - surreal-data:/data
+    restart: "no"
+    mem_limit: 32m
+
+  scene-assets-init:
+    image: alpine:3.22
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1000:1000 /assets"]
+    volumes:
+      - scene-assets:/assets
+    restart: "no"
+    mem_limit: 32m
+
+  surrealdb:
+    image: surrealdb/surrealdb:v3.2.3
+    command:
+      - start
+      - --bind
+      - 0.0.0.0:8000
+      - --user
+      - ${SURREAL_USER}
+      - --pass
+      - ${SURREAL_PASS}
+      - rocksdb:/data/utt.db
+    volumes:
+      - surreal-data:/data
+    expose:
+      - "8000"
+    depends_on:
+      surreal-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    mem_limit: 512m
+
+  game-server:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.game-server
+    environment:
+      PORT: "2567"
+      SURREAL_URL: ws://surrealdb:8000
+      SURREAL_USER: ${SURREAL_USER}
+      SURREAL_PASS: ${SURREAL_PASS}
+      SURREAL_NAMESPACE: ${SURREAL_NAMESPACE:-utt}
+      SURREAL_DATABASE: ${SURREAL_DATABASE:-development}
+      SCENE_ASSET_ROOT: /data/scene-assets
+    volumes:
+      - scene-assets:/data/scene-assets
+    expose:
+      - "2567"
+    depends_on:
+      surrealdb:
+        condition: service_started
+      scene-assets-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2567/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.web
+    ports:
+      - "${PREVIEW_BIND_IP:-127.0.0.1}:${PREVIEW_PORT:-4310}:8080"
+    depends_on:
+      game-server:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  surreal-data:
+  scene-assets:

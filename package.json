@@ -1,34 +1,36 @@
 {
-  "name": "under-the-table",
+  "name": "under-the-table-next",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22 <23"
   },
-  "dependencies": {
-    "@nextui-org/input": "^2.2.5",
-    "@nextui-org/react": "^2.4.8",
-    "@nextui-org/system": "^2.2.6",
-    "@nextui-org/theme": "^2.2.11",
-    "@supabase/auth-helpers-nextjs": "^0.10.0",
-    "@supabase/ssr": "^0.5.1",
-    "@supabase/supabase-js": "^2.45.4",
-    "framer-motion": "^11.11.4",
-    "next": "14.2.14",
-    "react": "^18",
-    "react-dom": "^18"
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm build:libs && pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r --if-present test",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "smoke:live": "tsx scripts/live-smoke.ts",
+    "build:libs": "pnpm --filter @utt/domain build && pnpm --filter @utt/protocol build",
+    "smoke:tokens": "tsx scripts/token-smoke.ts"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.14",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5"
-  }
+    "@colyseus/sdk": "0.17.43",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.8.1",
+    "globals": "17.11.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0",
+    "@utt/protocol": "workspace:*"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "msgpackr-extract"
+    ]
+  },
+  "type": "module"
 }
