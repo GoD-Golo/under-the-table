@@ -12,6 +12,9 @@ Before this slice, `Live` rendered only the freeform HUD. The active scene, map 
 - Character, Dice and Table Log reuse one widget implementation and float above the scene through `FreeformSurface`;
 - Virtual Table does not expose Director `+ Pin` / `+ Token` authoring controls;
 - HUD can be hidden or reset without affecting map/session truth;
+- entering Virtual Table removes UTT topbar/footer/Play toolbar and uses only discreet Back + utility bubble trays;
+- the utility tray exposes HUD visibility and optional browser Fullscreen API entry/exit;
+- Back exits browser fullscreen first, then returns to Companion and restores normal application chrome;
 - Companion preserves the map-free HUD for physical-table use;
 - Companion can use Campaign-authoritative state or explicit Offline local state;
 - Offline local supports persistent HP, local dice and a local event log;
@@ -28,7 +31,7 @@ Two independent browser contexts moved `Mira Voss`: the peer converged from appr
 
 With the game-server fully stopped, Offline Companion changed HP `10 -> 9`, rolled locally, and retained both HP and roll after a static-page reload. Campaign controls were disabled. A separate reconnect test proved that Offline remained selected after the game-server returned and `Retry campaign` succeeded; Campaign became available but was not chosen automatically.
 
-Desktop 1440×900 and mobile 390×844 screenshots were visually inspected. Mobile uses a compact bottom drawer so the map remains the primary surface.
+Desktop 1440×900 and mobile 390×844 screenshots were visually inspected. Mobile uses a compact bottom drawer so the map remains the primary surface. A later immersive refinement verified that topbar/footer/Play toolbar are absent in Virtual Table, the collapsed Back/tools bubbles remain visible, the utility tray opens on demand, browser fullscreen enters/exits successfully, and Back restores normal chrome with zero console errors.
 
 Full workspace gate passed: strict typecheck, ESLint, 14 domain tests, 4 game-server tests, and production builds.
 

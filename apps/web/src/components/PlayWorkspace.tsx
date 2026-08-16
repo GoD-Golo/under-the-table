@@ -20,6 +20,7 @@ interface PlayWorkspaceProps {
   onAdjustHp: (delta: number) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
   onReconnect: () => void;
+  onImmersiveChange: (immersive: boolean) => void;
 }
 
 function loadPlayMode(): PlayMode {
@@ -83,12 +84,26 @@ function VirtualTable({ state, clientName, onRoll, onAdjustHp, onMoveToken, show
   );
 }
 
-export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onMoveToken, onReconnect }: PlayWorkspaceProps) {
+export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onMoveToken, onReconnect, onImmersiveChange }: PlayWorkspaceProps) {
   const offline = useOfflineCompanion(campaignState);
   const [mode, setModeState] = useState<PlayMode>(() => loadPlayMode());
   const [companionSource, setCompanionSourceState] = useState<CompanionSource>(() => loadCompanionSource());
   const [showHud, setShowHud] = useState(true);
   const [resetToken, setResetToken] = useState(0);
+  const [fullscreenActive, setFullscreenActive] = useState(() => document.fullscreenElement !== null);
+  const [utilityTrayOpen, setUtilityTrayOpen] = useState(false);
+  const fullscreenSupported = document.fullscreenEnabled;
+  useEffect(() => {
+    onImmersiveChange(mode === "table" && !!campaignState);
+    return () => onImmersiveChange(false);
+  }, [campaignState, mode, onImmersiveChange]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setFullscreenActive(document.fullscreenElement !== null);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
   useEffect(() => {
     if (companionSource !== "campaign" || campaignState || connectionStatus !== "disconnected") return;
     setCompanionSourceState("offline");
@@ -100,10 +115,28 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
 
   const setMode = (next: PlayMode) => { setModeState(next); window.localStorage.setItem("utt.play.mode.v1", next); };
   const setCompanionSource = (next: CompanionSource) => { setCompanionSourceState(next); window.localStorage.setItem("utt.play.companion-source.v1", next); };
+  const toggleFullscreen = async () => {
+    if (!fullscreenSupported) return;
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  };
+  const leaveVirtualTable = async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    setMode("companion");
+  };
 
   return (
-    <main className="play-workspace">
-      <header className="play-toolbar">
+    <main className={`play-workspace ${mode === "table" && campaignState ? "immersive-table" : ""}`}>
+      {mode === "table" && campaignState ? <>
+        <button type="button" className="play-bubble play-back-bubble" onClick={() => void leaveVirtualTable()} aria-label="Back to Play" title="Back to Play">←</button>
+        <div className={`play-utility-bubble ${utilityTrayOpen ? "open" : ""}`}>
+          {utilityTrayOpen ? <div className="play-bubble-tray" role="group" aria-label="Virtual Table tools">
+            <button type="button" onClick={() => setShowHud((value) => !value)} aria-pressed={!showHud}>{showHud ? "Hide HUD" : "Show HUD"}</button>
+            <button type="button" disabled={!fullscreenSupported} onClick={() => void toggleFullscreen()} aria-pressed={fullscreenActive} title={fullscreenSupported ? "Toggle browser fullscreen" : "Fullscreen is not supported by this browser"}>{fullscreenActive ? "Exit fullscreen" : "Fullscreen"}</button>
+          </div> : null}
+          <button type="button" className="play-bubble play-tools-bubble" onClick={() => setUtilityTrayOpen((value) => !value)} aria-expanded={utilityTrayOpen} aria-label="Virtual Table tools">•••</button>
+        </div>
+      </> : <header className="play-toolbar">
         <div className="play-mode-switch" role="group" aria-label="Play surface">
           <button type="button" className={mode === "table" ? "active" : ""} disabled={!campaignState} onClick={() => setMode("table")}>Virtual Table</button>
           <button type="button" className={mode === "companion" ? "active" : ""} onClick={() => setMode("companion")}>Companion</button>
@@ -119,7 +152,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
             <button type="button" className="ghost-button" onClick={() => setResetToken((value) => value + 1)}>Reset HUD</button>
           </>}
         </div>
-      </header>
+      </header>}
 
       {connectionError && !campaignState ? <div className="play-connection-note"><span>{connectionError}</span><button type="button" onClick={onReconnect}>Retry campaign</button></div> : null}
 
