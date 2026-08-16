@@ -28,7 +28,7 @@ export function createRollEvent(
 }
 
 export function createHpEvent(
-  input: CommonInput & { currentHp: number; maxHp: number; delta: number }
+  input: CommonInput & { characterId: string; characterName: string; currentHp: number; maxHp: number; delta: number }
 ): { event: GameEvent; nextHp: number } {
   const nextHp = clampHitPoints(input.currentHp, input.maxHp, input.delta);
   const actualDelta = nextHp - input.currentHp;
@@ -39,8 +39,8 @@ export function createHpEvent(
       sessionId: input.sessionId,
       kind: "hp",
       actor: input.actor,
-      summary: `${input.actor} changed HP ${input.currentHp} -> ${nextHp} (${actualDelta >= 0 ? "+" : ""}${actualDelta})`,
-      payload: { previousHp: input.currentHp, nextHp, requestedDelta: input.delta, actualDelta },
+      summary: `${input.actor} changed ${input.characterName} HP ${input.currentHp} -> ${nextHp} (${actualDelta >= 0 ? "+" : ""}${actualDelta})`,
+      payload: { characterId: input.characterId, previousHp: input.currentHp, nextHp, requestedDelta: input.delta, actualDelta },
       at: input.at
     }
   };

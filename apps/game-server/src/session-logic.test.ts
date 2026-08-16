@@ -11,9 +11,10 @@ describe("authoritative session transitions", () => {
   });
 
   it("persists the actual clamped HP delta", () => {
-    const result = createHpEvent({ ...base, currentHp: 3, maxHp: 32, delta: -10 });
+    const result = createHpEvent({ ...base, characterId: "mira", characterName: "Mira", currentHp: 3, maxHp: 32, delta: -10 });
     expect(result.nextHp).toBe(0);
-    expect(result.event.payload).toMatchObject({ requestedDelta: -10, actualDelta: -3 });
+    expect(result.event.payload).toMatchObject({ characterId: "mira", requestedDelta: -10, actualDelta: -3 });
+    expect(result.event.summary).toContain("Mira HP");
   });
   it("creates a durable scene presentation event", () => {
     const event = createScenePresentedEvent({

@@ -1,31 +1,46 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { LiveViewState } from "../live-room.js";
+import type { LiveCharacterView, LiveViewState } from "../live-room.js";
 import { WidgetFrame } from "./WidgetFrame.js";
 
 export interface SessionHudOptions {
   state: LiveViewState;
+  selectedCharacterId: string | null;
+  onSelectCharacter: (characterId: string) => void;
   onRoll: (sides: number, modifier: number) => void;
-  onAdjustHp: (delta: number) => void;
+  onAdjustHp: (characterId: string, delta: number) => void;
   authority: "campaign" | "offline";
 }
 
-export function useSessionHudWidgets({ state, onRoll, onAdjustHp, authority }: SessionHudOptions): Record<string, ReactNode> {
+function selectedCharacter(state: LiveViewState, selectedCharacterId: string | null): LiveCharacterView | null {
+  return state.characters.find((character) => character.id === selectedCharacterId) ?? state.characters[0] ?? null;
+}
+
+export function useSessionHudWidgets({ state, selectedCharacterId, onSelectCharacter, onRoll, onAdjustHp, authority }: SessionHudOptions): Record<string, ReactNode> {
   const [die, setDie] = useState(20);
   const [modifier, setModifier] = useState(5);
-  const hpPercent = Math.round((state.hp / state.maxHp) * 100);
+  const character = selectedCharacter(state, selectedCharacterId);
+  const hp = character?.resources.find((resource) => resource.key === "hp") ?? null;
+  const hpPercent = hp ? Math.round((hp.current / hp.max) * 100) : 0;
   const authorityNote = authority === "campaign"
-    ? "Campaign authoritative. Accepted changes become durable session events."
+    ? "Campaign authoritative. Accepted changes update this character's durable runtime state."
     : "Offline local state. Changes stay on this device and do not sync automatically.";
   const rngMeta = authority === "campaign" ? "Server RNG" : "Local RNG";
 
   return useMemo(() => ({
     character: (
-      <WidgetFrame eyebrow="Character" title={state.characterName} meta={`#${state.sessionId.slice(-3)}`}>
-        <div className="vital-row"><div><span className="vital-label">Hit points</span><strong className="hp-value">{state.hp}<small> / {state.maxHp}</small></strong></div><span className="hp-percent">{hpPercent}%</span></div>
-        <div className="hp-track"><span style={{ width: `${hpPercent}%` }} /></div>
-        <div className="action-cluster" aria-label="Adjust hit points">
-          {[-5, -1, 1, 5].map((delta) => <button className="game-button compact" type="button" key={delta} onClick={() => onAdjustHp(delta)}>{delta > 0 ? `+${delta}` : delta}</button>)}
-        </div>
+      <WidgetFrame eyebrow="Character" title={character?.name ?? "No character"} meta={character?.rulesetId ?? "unassigned"}>
+        {state.characters.length > 1 ? (
+          <label className="modifier-control"><span>Character</span><select value={character?.id ?? ""} onChange={(event) => onSelectCharacter(event.target.value)}>
+            {state.characters.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select></label>
+        ) : null}
+        {character && hp ? <>
+          <div className="vital-row"><div><span className="vital-label">Hit points</span><strong className="hp-value">{hp.current}<small> / {hp.max}</small></strong></div><span className="hp-percent">{hpPercent}%</span></div>
+          <div className="hp-track"><span style={{ width: `${hpPercent}%` }} /></div>
+          <div className="action-cluster" aria-label="Adjust hit points">
+            {[-5, -1, 1, 5].map((delta) => <button className="game-button compact" type="button" key={delta} onClick={() => onAdjustHp(character.id, delta)}>{delta > 0 ? `+${delta}` : delta}</button>)}
+          </div>
+        </> : <p className="empty-state">No HP resource is available for this character.</p>}
         <p className="widget-note">{authorityNote}</p>
       </WidgetFrame>
     ),
@@ -45,5 +60,5 @@ export function useSessionHudWidgets({ state, onRoll, onAdjustHp, authority }: S
         </div>
       </WidgetFrame>
     )
-  }), [authority, authorityNote, die, hpPercent, modifier, onAdjustHp, onRoll, rngMeta, state]);
+  }), [authority, authorityNote, character, die, hp, hpPercent, modifier, onAdjustHp, onRoll, onSelectCharacter, rngMeta, state]);
 }

@@ -54,7 +54,16 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - covered Play cells suppress token rendering/interaction;
 - this is explicitly visual UX, not secure player-secret delivery.
 
-Walls/doors, dynamic vision/LOS, initiative/targeting, travel rules, hex-map generation, auth/roles, secure visibility/secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
+**Vertical Slice 004** establishes the Character Foundation:
+
+- durable multi-character definitions and runtime resources;
+- D&D 2024 represented as a ruleset id, not hard-coded core behavior;
+- character HP separated from session snapshots and targeted by `characterId`;
+- per-device character selection for party play;
+- minimal Character Library for create/select;
+- legacy Mira/HP migration from the earlier single-character room state.
+
+Walls/doors, dynamic vision/LOS, initiative/targeting, travel rules, hex-map generation, auth/roles, secure visibility/secret-lore authorization and the deeper D&D 2024 Character Builder plus Content/Action/Effect engines remain intentionally separate milestones.
 
 ## Development architecture
 
@@ -75,6 +84,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-003-5.md` — freeform workspace and interaction stabilization evidence
 - `docs/VERTICAL-SLICE-003-6.md` — unified Virtual Table / Companion evidence
 - `docs/VERTICAL-SLICE-003-7.md` — simple fog placeholder evidence
+- `docs/VERTICAL-SLICE-004.md` — Character Foundation evidence
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands

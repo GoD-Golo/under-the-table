@@ -10,6 +10,8 @@ const evidencePath = resolve(".runtime/smoke-state.json");
 interface RecoveryEvidence {
   roomId: string;
   sequence: number;
+  characterId: string;
+  originalHp: number;
   hp: number;
   latestRollTotal: number;
   activeSceneId: string;
@@ -50,19 +52,27 @@ async function mutateAndVerify(): Promise<void> {
     assert(roomA.state.latestRollTotal === roomA.state.latestRollNatural + 5, "roll modifier was not applied authoritatively");
     assert(roomB.state.latestRollTotal === roomA.state.latestRollTotal, "clients disagree on roll result");
 
-    const hpBefore = roomA.state.hp;
-    roomB.send(MESSAGE.adjustHp, { delta: -3 });
+    const character = Array.from(roomA.state.characters.values())[0];
+    assert(character, "no character available for HP smoke");
+    const hpResource = character.resources.get("hp");
+    assert(hpResource, "selected character has no HP resource");
+    const hpBefore = hpResource.current;
+    roomB.send(MESSAGE.adjustHp, { characterId: character.id, delta: -3 });
     await waitFor(
       () => roomA.state.eventSequence === startingSequence + 2 && roomB.state.eventSequence === startingSequence + 2,
       "synchronized HP event"
     );
     const expectedHp = Math.max(0, hpBefore - 3);
-    assert(roomA.state.hp === expectedHp && roomB.state.hp === expectedHp, "clients disagree on authoritative HP state");
+    const hpA = roomA.state.characters.get(character.id)?.resources.get("hp")?.current;
+    const hpB = roomB.state.characters.get(character.id)?.resources.get("hp")?.current;
+    assert(hpA === expectedHp && hpB === expectedHp, "clients disagree on authoritative character HP state");
 
     const evidence: RecoveryEvidence = {
       roomId: roomA.roomId,
       sequence: roomA.state.eventSequence,
-      hp: roomA.state.hp,
+      characterId: character.id,
+      originalHp: hpBefore,
+      hp: expectedHp,
       latestRollTotal: roomA.state.latestRollTotal,
       activeSceneId: roomA.state.activeSceneId
     };
@@ -83,11 +93,20 @@ async function verifyRecovery(): Promise<void> {
       () => room.state.eventSequence === expected.sequence,
       `recovered sequence ${expected.sequence}`
     );
-    assert(room.state.hp === expected.hp, `expected HP ${expected.hp}, got ${room.state.hp}`);
+    const recoveredHp = room.state.characters.get(expected.characterId)?.resources.get("hp")?.current;
+    assert(recoveredHp === expected.hp, `expected HP ${expected.hp}, got ${recoveredHp}`);
     assert(room.state.latestRollTotal === expected.latestRollTotal, "latest roll did not survive room recovery");
     await waitFor(() => room.state.activeSceneId === expected.activeSceneId, `recovered active scene ${expected.activeSceneId}`);
     assert(room.state.activeSceneId === expected.activeSceneId, "active scene did not survive room recovery");
-    console.log(JSON.stringify({ ok: true, mode, endpoint, previousRoomId: expected.roomId, newRoomId: room.roomId, sequence: room.state.eventSequence, hp: room.state.hp, activeSceneId: room.state.activeSceneId }));
+    const restoreDelta = expected.originalHp - expected.hp;
+    if (restoreDelta !== 0) {
+      const restoreSequence = room.state.eventSequence + 1;
+      room.send(MESSAGE.adjustHp, { characterId: expected.characterId, delta: restoreDelta });
+      await waitFor(() => room.state.eventSequence === restoreSequence, "HP restoration event");
+      const restoredHp = room.state.characters.get(expected.characterId)?.resources.get("hp")?.current;
+      assert(restoredHp === expected.originalHp, `failed to restore HP ${expected.originalHp}`);
+    }
+    console.log(JSON.stringify({ ok: true, mode, endpoint, previousRoomId: expected.roomId, newRoomId: room.roomId, recoveredSequence: expected.sequence, characterId: expected.characterId, recoveredHp, restoredHp: expected.originalHp, activeSceneId: room.state.activeSceneId }));
   } finally {
     await room.leave();
   }

@@ -477,3 +477,13 @@ button { color: inherit; }
 .fog-layer.director.editing .fog-cell.revealed:hover { background: rgba(217,97,97,.14); box-shadow: inset 0 0 0 2px rgba(217,97,97,.38); }
 .scene-viewport.revealing-fog { cursor: crosshair; }
 .scene-toolbar .map-tool:disabled { opacity: .28; cursor: not-allowed; }
+
+/* VS004 — character foundation */
+.character-library { width: min(680px, 100%); max-height: min(760px, 88dvh); overflow: auto; }
+.character-library-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.character-library-item { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-height: 76px; padding: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(255,255,255,.025); color: #d9d6ce; text-align: left; }
+.character-library-item.active { border-color: rgba(99,200,189,.45); background: rgba(99,200,189,.07); box-shadow: inset 0 0 0 1px rgba(99,200,189,.08); }
+.character-library-item strong { font-size: 12px; }
+.character-library-item span { color: var(--arcane); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.character-library-item small { color: #747b86; font-size: 9px; }
+.character-create-form { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.06); }

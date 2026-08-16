@@ -8,12 +8,13 @@ export const MESSAGE = {
   createToken: "create_token",
   moveToken: "move_token",
   setFogEnabled: "set_fog_enabled",
-  setFogCell: "set_fog_cell"
+  setFogCell: "set_fog_cell",
+  createCharacter: "create_character"
 } as const;
 
 export interface JoinOptions { clientName?: string }
 export interface RollCommand { sides: number; modifier: number }
-export interface AdjustHpCommand { delta: number }
+export interface AdjustHpCommand { characterId: string; delta: number }
 export interface PresentSceneCommand { sceneId: string }
 
 export interface CreateTokenCommand {
@@ -31,3 +32,5 @@ export interface SetFogCellCommand { sceneId: string; column: number; row: numbe
 
 export const SERVER_MESSAGE = { commandError: "command_error" } as const;
 export interface CommandErrorMessage { message: string }
+
+export interface CreateCharacterCommand { name: string; rulesetId: string; maxHp: number }
