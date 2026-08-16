@@ -16,7 +16,7 @@ function localRandomInt(maxExclusive: number): number {
 
 function cloneCharacter(character: LiveCharacterView | null): LiveCharacterView {
   if (!character) return {
-    id: "offline-adventurer", name: "Offline Adventurer", rulesetId: "custom", schemaVersion: 1,
+    id: "offline-adventurer", name: "Offline Adventurer", rulesetId: "custom", schemaVersion: 1, rulesetData: {},
     resources: [{ id: "offline-hp", key: "hp", label: "Hit points", current: 10, max: 10 }]
   };
   return { ...character, resources: character.resources.map((resource) => ({ ...resource })) };
@@ -34,6 +34,7 @@ function offlineState(seed: LiveViewState | null, selectedCharacterId: string | 
     tokens: [],
     fogEnabled: false,
     fogRevealedCells: [],
+    initiative: { round: 0, activeIndex: -1, entries: [] },
     latestRoll: null,
     events: copied ? [{ sequence: 1, kind: "offline", actor: "Local", summary: `Copied ${character.name} for offline play`, at: now }] : []
   };
@@ -45,7 +46,7 @@ function loadOffline(seed: LiveViewState | null, selectedCharacterId: string | n
     if (!raw) return offlineState(seed, selectedCharacterId);
     const parsed = JSON.parse(raw) as LiveViewState;
     if (!Array.isArray(parsed.characters) || parsed.characters.length === 0 || !Array.isArray(parsed.events)) return offlineState(seed, selectedCharacterId);
-    return { ...parsed, connectedPlayers: 1, activeSceneId: "", tokens: [], fogEnabled: false, fogRevealedCells: [] };
+    return { ...parsed, connectedPlayers: 1, activeSceneId: "", tokens: [], fogEnabled: false, fogRevealedCells: [], initiative: parsed.initiative ?? { round: 0, activeIndex: -1, entries: [] } };
   } catch {
     return offlineState(seed, selectedCharacterId);
   }

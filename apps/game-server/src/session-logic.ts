@@ -81,3 +81,29 @@ export function createTokenMovedEvent(input: CommonInput & {
     at: input.at
   };
 }
+
+export function createInitiativeRollEvent(input: CommonInput & {
+  entryId: string; characterId: string | null; label: string; natural: number; modifier: number; total: number;
+}): GameEvent {
+  return {
+    sequence: input.sequence, sessionId: input.sessionId, kind: "initiative", actor: input.actor,
+    summary: `${input.actor} rolled initiative for ${input.label}: ${input.natural} ${input.modifier >= 0 ? "+" : ""}${input.modifier} -> ${input.total}`,
+    payload: { action: "rolled", entryId: input.entryId, characterId: input.characterId, label: input.label, natural: input.natural, modifier: input.modifier, total: input.total },
+    at: input.at
+  };
+}
+
+export function createInitiativeAdvancedEvent(input: CommonInput & { label: string; round: number }): GameEvent {
+  return {
+    sequence: input.sequence, sessionId: input.sessionId, kind: "initiative", actor: input.actor,
+    summary: `${input.actor} advanced initiative to ${input.label} · round ${input.round}`,
+    payload: { action: "advanced", label: input.label, round: input.round }, at: input.at
+  };
+}
+
+export function createInitiativeClearedEvent(input: CommonInput): GameEvent {
+  return {
+    sequence: input.sequence, sessionId: input.sessionId, kind: "initiative", actor: input.actor,
+    summary: `${input.actor} cleared initiative`, payload: { action: "cleared" }, at: input.at
+  };
+}

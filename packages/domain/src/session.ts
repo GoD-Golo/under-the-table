@@ -1,4 +1,4 @@
-export type GameEventKind = "roll" | "hp" | "scene_presented" | "token_created" | "token_moved";
+export type GameEventKind = "roll" | "hp" | "scene_presented" | "token_created" | "token_moved" | "initiative";
 
 export interface GameEvent {
   sequence: number;
@@ -18,6 +18,20 @@ export interface RecentEvent {
   at: string;
 }
 
+
+export interface InitiativeEntry {
+  id: string;
+  label: string;
+  score: number;
+  characterId: string | null;
+}
+
+export interface InitiativeState {
+  round: number;
+  activeIndex: number;
+  entries: InitiativeEntry[];
+}
+
 export interface SessionSnapshot {
   sessionId: string;
   sequence: number;
@@ -29,4 +43,5 @@ export interface SessionSnapshot {
     total: number;
   } | null;
   recentEvents: RecentEvent[];
+  initiative?: InitiativeState;
 }

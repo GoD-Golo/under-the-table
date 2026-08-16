@@ -13,7 +13,7 @@
     "test": "pnpm -r --if-present test",
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "smoke:live": "tsx scripts/live-smoke.ts",
-    "build:libs": "pnpm --filter @utt/domain build && pnpm --filter @utt/protocol build",
+    "build:libs": "pnpm --filter @utt/domain build && pnpm --filter @utt/rules-dnd2024 build && pnpm --filter @utt/protocol build",
     "smoke:tokens": "tsx scripts/token-smoke.ts"
   },
   "devDependencies": {

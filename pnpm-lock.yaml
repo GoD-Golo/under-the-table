@@ -47,6 +47,9 @@ importers:
       '@utt/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@utt/rules-dnd2024':
+        specifier: workspace:*
+        version: link:../../packages/rules-dnd2024
       express:
         specifier: 5.2.1
         version: 5.2.1
@@ -78,6 +81,9 @@ importers:
       '@utt/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@utt/rules-dnd2024':
+        specifier: workspace:*
+        version: link:../../packages/rules-dnd2024
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -125,6 +131,15 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  packages/rules-dnd2024:
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(tsx@4.20.6))
 
 packages:
 
@@ -2820,7 +2835,7 @@ snapshots:
 
   require-in-the-middle@5.2.0:
     dependencies:
-      debug: 4.3.7
+      debug: 4.4.3
       module-details-from-path: 1.0.4
       resolve: 1.22.12
     transitivePeerDependencies:

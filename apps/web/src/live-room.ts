@@ -32,7 +32,16 @@ export interface LiveCharacterView {
   name: string;
   rulesetId: string;
   schemaVersion: number;
+  rulesetData: Record<string, unknown>;
   resources: LiveCharacterResourceView[];
+}
+
+
+export interface LiveInitiativeEntryView {
+  id: string;
+  label: string;
+  score: number;
+  characterId: string | null;
 }
 
 export interface LiveViewState {
@@ -44,6 +53,7 @@ export interface LiveViewState {
   tokens: LiveTokenView[];
   fogEnabled: boolean;
   fogRevealedCells: string[];
+  initiative: { round: number; activeIndex: number; entries: LiveInitiativeEntryView[] };
   latestRoll: { sides: number; natural: number; modifier: number; total: number } | null;
   events: Array<{ sequence: number; kind: string; actor: string; summary: string; at: string }>;
 }
@@ -53,6 +63,7 @@ function snapshot(state: LiveRoomState): LiveViewState {
     sessionId: state.sessionId,
     characters: Array.from(state.characters.values()).map((character) => ({
       id: character.id, name: character.name, rulesetId: character.rulesetId, schemaVersion: character.schemaVersion,
+      rulesetData: (() => { try { return JSON.parse(character.rulesetDataJson) as Record<string, unknown>; } catch { return {}; } })(),
       resources: Array.from(character.resources.values()).map((resource) => ({
         id: resource.id, key: resource.key, label: resource.label, current: resource.current, max: resource.max
       }))
@@ -66,6 +77,10 @@ function snapshot(state: LiveRoomState): LiveViewState {
     })),
     fogEnabled: state.fogEnabled,
     fogRevealedCells: Array.from(state.fogRevealedCells),
+    initiative: {
+      round: state.initiativeRound, activeIndex: state.initiativeActiveIndex,
+      entries: Array.from(state.initiativeEntries).map((entry) => ({ id: entry.id, label: entry.label, score: entry.score, characterId: entry.characterId || null }))
+    },
     latestRoll: state.latestRollSides > 0 ? {
       sides: state.latestRollSides,
       natural: state.latestRollNatural,
@@ -167,9 +182,14 @@ export function useLiveRoom() {
     roomRef.current?.send(MESSAGE.adjustHp, { characterId, delta });
   }, []);
 
-  const createCharacter = useCallback((command: { name: string; rulesetId: string; maxHp: number }) => {
+  const createCharacter = useCallback((command: { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }) => {
     setError(null);
     roomRef.current?.send(MESSAGE.createCharacter, command);
+  }, []);
+
+  const updateCharacter = useCallback((command: { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }) => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.updateCharacter, command);
   }, []);
 
   const createToken = useCallback((command: {
@@ -194,6 +214,21 @@ export function useLiveRoom() {
     roomRef.current?.send(MESSAGE.setFogCell, { sceneId, column, row, revealed });
   }, []);
 
+  const rollInitiative = useCallback((command: { characterId?: string; label?: string; modifier?: number }) => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.rollInitiative, command);
+  }, []);
+
+  const advanceInitiative = useCallback(() => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.advanceInitiative, {});
+  }, []);
+
+  const clearInitiative = useCallback(() => {
+    setError(null);
+    roomRef.current?.send(MESSAGE.clearInitiative, {});
+  }, []);
+
   return {
     state,
     status,
@@ -202,11 +237,15 @@ export function useLiveRoom() {
     roll,
     adjustHp,
     createCharacter,
+    updateCharacter,
     presentScene,
     createToken,
     moveToken,
     setFogEnabled,
     setFogCell,
+    rollInitiative,
+    advanceInitiative,
+    clearInitiative,
     reconnect: () => setAttempt((value) => value + 1)
   };
 }

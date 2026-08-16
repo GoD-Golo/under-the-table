@@ -2,11 +2,13 @@ import { randomInt, randomUUID } from "node:crypto";
 import { Room, type Client } from "@colyseus/core";
 import {
   normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
-  type CharacterRuntime, type GameEvent, type RecentEvent, type SceneToken, type SessionSnapshot
+  type CharacterRuntime, type GameEvent, type InitiativeState, type RecentEvent, type SceneToken, type SessionSnapshot
 } from "@utt/domain";
+import { DND2024_RULESET_ID, abilityModifier, normalizeDnd2024Data } from "@utt/rules-dnd2024";
 import {
   CharacterResourceState,
   CharacterState,
+  InitiativeEntryState,
   EventState,
   LiveRoomState,
   TokenState,
@@ -20,11 +22,13 @@ import {
   type MoveTokenCommand,
   type PresentSceneCommand,
   type RollCommand,
+  type RollInitiativeCommand,
   type SetFogCellCommand,
-  type SetFogEnabledCommand
+  type SetFogEnabledCommand,
+  type UpdateCharacterCommand
 } from "@utt/protocol";
 import { surrealStore } from "../persistence/surreal-store.js";
-import { createHpEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "../session-logic.js";
+import { createHpEvent, createInitiativeAdvancedEvent, createInitiativeClearedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "../session-logic.js";
 
 const RECENT_EVENT_LIMIT = 12;
 
@@ -62,6 +66,7 @@ function characterToState(runtime: CharacterRuntime): CharacterState {
   state.name = runtime.definition.name;
   state.rulesetId = runtime.definition.rulesetId;
   state.schemaVersion = runtime.definition.schemaVersion;
+  state.rulesetDataJson = JSON.stringify(runtime.definition.rulesetData);
   for (const resource of runtime.resources) {
     const resourceState = new CharacterResourceState();
     resourceState.id = resource.id;
@@ -71,6 +76,15 @@ function characterToState(runtime: CharacterRuntime): CharacterState {
     resourceState.max = resource.max;
     state.resources.set(resource.key, resourceState);
   }
+  return state;
+}
+
+function initiativeEntryToState(entry: InitiativeState["entries"][number]): InitiativeEntryState {
+  const state = new InitiativeEntryState();
+  state.id = entry.id;
+  state.label = entry.label;
+  state.score = entry.score;
+  state.characterId = entry.characterId ?? "";
   return state;
 }
 
@@ -104,6 +118,18 @@ export class VerticalSliceRoom extends Room {
     });
     this.onMessage(MESSAGE.createCharacter, (client, message: CreateCharacterCommand) => {
       this.enqueue(client, () => this.handleCreateCharacter(client, message));
+    });
+    this.onMessage(MESSAGE.updateCharacter, (client, message: UpdateCharacterCommand) => {
+      this.enqueue(client, () => this.handleUpdateCharacter(client, message));
+    });
+    this.onMessage(MESSAGE.rollInitiative, (client, message: RollInitiativeCommand) => {
+      this.enqueue(client, () => this.handleRollInitiative(client, message));
+    });
+    this.onMessage(MESSAGE.advanceInitiative, (client) => {
+      this.enqueue(client, () => this.handleAdvanceInitiative(client));
+    });
+    this.onMessage(MESSAGE.clearInitiative, (client) => {
+      this.enqueue(client, () => this.handleClearInitiative(client));
     });
     this.onMessage(MESSAGE.createToken, (client, message: CreateTokenCommand) => {
       this.enqueue(client, () => this.handleCreateToken(client, message));
@@ -160,11 +186,113 @@ export class VerticalSliceRoom extends Room {
     for (const cell of fog.revealedCells) this.state.fogRevealedCells.push(cell);
   }
 
+  private replaceInitiative(initiative: InitiativeState): void {
+    this.state.initiativeRound = initiative.round;
+    this.state.initiativeActiveIndex = initiative.activeIndex;
+    this.state.initiativeEntries.clear();
+    for (const entry of initiative.entries) this.state.initiativeEntries.push(initiativeEntryToState(entry));
+  }
+
+  private currentInitiative(): InitiativeState {
+    return {
+      round: this.state.initiativeRound,
+      activeIndex: this.state.initiativeActiveIndex,
+      entries: Array.from(this.state.initiativeEntries).map((entry) => ({
+        id: entry.id, label: entry.label, score: entry.score, characterId: entry.characterId || null
+      }))
+    };
+  }
+
   private async handleCreateCharacter(_client: Client, command: CreateCharacterCommand): Promise<void> {
+    const rulesetData = command?.rulesetId === DND2024_RULESET_ID ? normalizeDnd2024Data(command?.rulesetData) : command?.rulesetData ?? {};
     const runtime = await surrealStore.createCharacter({
-      name: command?.name, rulesetId: command?.rulesetId, maxHp: command?.maxHp, rulesetData: {}
+      name: command?.name, rulesetId: command?.rulesetId, maxHp: command?.maxHp, rulesetData
     });
     this.state.characters.set(runtime.definition.id, characterToState(runtime));
+  }
+
+  private async handleUpdateCharacter(_client: Client, command: UpdateCharacterCommand): Promise<void> {
+    if (typeof command?.characterId !== "string" || !command.characterId) throw new Error("characterId is required");
+    const existing = this.state.characters.get(command.characterId);
+    if (!existing) throw new Error("character not found");
+    const rulesetData = existing.rulesetId === DND2024_RULESET_ID ? normalizeDnd2024Data(command?.rulesetData) : command?.rulesetData ?? {};
+    const runtime = await surrealStore.updateCharacter({
+      characterId: command.characterId, name: command?.name, maxHp: command?.maxHp, rulesetData
+    });
+    this.state.characters.set(runtime.definition.id, characterToState(runtime));
+  }
+
+  private async handleRollInitiative(client: Client, command: RollInitiativeCommand): Promise<void> {
+    let characterId: string | null = null;
+    let label = typeof command?.label === "string" ? command.label.trim().replace(/\s+/g, " ").slice(0, 80) : "";
+    let modifier = 0;
+
+    if (typeof command?.characterId === "string" && command.characterId) {
+      const character = this.state.characters.get(command.characterId);
+      if (!character) throw new Error("character not found");
+      characterId = character.id;
+      label = character.name;
+      if (character.rulesetId === DND2024_RULESET_ID) {
+        const data = normalizeDnd2024Data(JSON.parse(character.rulesetDataJson));
+        modifier = abilityModifier(data.abilities.dexterity);
+      }
+    } else {
+      modifier = Number(command?.modifier ?? 0);
+      if (!Number.isInteger(modifier) || modifier < -50 || modifier > 50) throw new Error("initiative modifier must be an integer between -50 and 50");
+    }
+    if (!label) throw new Error("initiative label is required");
+
+    const natural = randomInt(1, 21);
+    const total = natural + modifier;
+    const current = this.currentInitiative();
+    const activeId = current.entries[current.activeIndex]?.id ?? null;
+    const existing = characterId ? current.entries.find((entry) => entry.characterId === characterId) : undefined;
+    const entry = { id: existing?.id ?? randomUUID(), label, score: total, characterId };
+    const entries = existing ? current.entries.map((item) => item.id === existing.id ? entry : item) : [...current.entries, entry];
+    entries.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
+    const initiative: InitiativeState = {
+      round: Math.max(1, current.round),
+      activeIndex: activeId ? Math.max(0, entries.findIndex((item) => item.id === activeId)) : 0,
+      entries
+    };
+    const event = createInitiativeRollEvent({
+      sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor: this.actorFor(client), at: new Date().toISOString(),
+      entryId: entry.id, characterId, label, natural, modifier, total
+    });
+    const latestRoll = { sides: 20, natural, modifier, total };
+    await surrealStore.persist(event, this.nextSnapshot(event, latestRoll, this.state.activeSceneId, initiative));
+    this.state.latestRollSides = 20;
+    this.state.latestRollNatural = natural;
+    this.state.latestRollModifier = modifier;
+    this.state.latestRollTotal = total;
+    this.replaceInitiative(initiative);
+    this.applyAcceptedEvent(event);
+  }
+
+  private async handleAdvanceInitiative(client: Client): Promise<void> {
+    const current = this.currentInitiative();
+    if (!current.entries.length) throw new Error("initiative is empty");
+    let activeIndex = current.activeIndex < 0 ? 0 : current.activeIndex + 1;
+    let round = Math.max(1, current.round);
+    if (activeIndex >= current.entries.length) { activeIndex = 0; round += 1; }
+    const initiative: InitiativeState = { ...current, round, activeIndex };
+    const label = initiative.entries[activeIndex]?.label ?? "next combatant";
+    const event = createInitiativeAdvancedEvent({
+      sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor: this.actorFor(client), at: new Date().toISOString(), label, round
+    });
+    await surrealStore.persist(event, this.nextSnapshot(event, this.currentRoll(), this.state.activeSceneId, initiative));
+    this.replaceInitiative(initiative);
+    this.applyAcceptedEvent(event);
+  }
+
+  private async handleClearInitiative(client: Client): Promise<void> {
+    const initiative: InitiativeState = { round: 0, activeIndex: -1, entries: [] };
+    const event = createInitiativeClearedEvent({
+      sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor: this.actorFor(client), at: new Date().toISOString()
+    });
+    await surrealStore.persist(event, this.nextSnapshot(event, this.currentRoll(), this.state.activeSceneId, initiative));
+    this.replaceInitiative(initiative);
+    this.applyAcceptedEvent(event);
   }
 
   private async handleCreateToken(client: Client, command: CreateTokenCommand): Promise<void> {
@@ -321,11 +449,12 @@ export class VerticalSliceRoom extends Room {
   private nextSnapshot(
     event: GameEvent,
     latestRoll: SessionSnapshot["latestRoll"],
-    activeSceneId = this.state.activeSceneId
+    activeSceneId = this.state.activeSceneId,
+    initiative = this.currentInitiative()
   ): SessionSnapshot {
     return {
       sessionId: SESSION_ID, sequence: event.sequence, activeSceneId, latestRoll,
-      recentEvents: this.recentEventsWith(event)
+      recentEvents: this.recentEventsWith(event), initiative
     };
   }
 
@@ -347,5 +476,6 @@ export class VerticalSliceRoom extends Room {
       state.at = event.at;
       this.state.events.push(state);
     }
+    this.replaceInitiative(snapshot.initiative ?? { round: 0, activeIndex: -1, entries: [] });
   }
 }
