@@ -22,7 +22,7 @@ jobs:
           corepack prepare pnpm@10.15.1 --activate
       - name: Reassemble and apply exact local patch
         run: |
-          cat .github/vs006part00 .github/vs006part01 .github/vs006part02 .github/vs006part03 .github/vs006part04 > /tmp/vs006.payload.b64
+          cat .github/vs006part00 .github/vs006part01 .github/vs006part02 .github/vs006p3_0 .github/vs006p3_1 .github/vs006part04 > /tmp/vs006.payload.b64
           echo 'c1b9223593678f15653b063ef259e00d3bb480302134597fb0a87e2687f9f371  /tmp/vs006.payload.b64' | sha256sum -c -
           base64 -d /tmp/vs006.payload.b64 | xz -d > /tmp/vs006.patch
           git apply --check /tmp/vs006.patch
@@ -33,7 +33,7 @@ jobs:
         run: pnpm check
       - name: Verify and publish exact tree
         run: |
-          git rm .github/vs006.patch.xz.b64 .github/vs006part00 .github/vs006part01 .github/vs006part02 .github/vs006part03 .github/vs006part04 .github/workflows/vs006-bootstrap.yml
+          git rm .github/vs006.patch.xz.b64 .github/vs006part00 .github/vs006part01 .github/vs006part02 .github/vs006part03 .github/vs006p3_0 .github/vs006p3_1 .github/vs006part04 .github/workflows/vs006-bootstrap.yml
           ACTUAL_TREE="$(git write-tree)"
           EXPECTED_TREE="77aa5bd028ab89962886c3dec4ecda26a3df2497"
           echo "actual=$ACTUAL_TREE expected=$EXPECTED_TREE"
