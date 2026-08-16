@@ -12,9 +12,11 @@ The defining experience is the live session. A player or DM should feel that the
 
 ## Live experience
 
-The HUD is modular. Containers can be dragged, resized, hidden and configured. Examples include character status, HP/resources, actions, spells, inventory, dice, conditions, initiative, selected target, event log, notes and future playfield/map surfaces.
+Play is participation in the session, not one mandatory screen. A virtual-table surface should use the active map/scene and tokens as the playfield with modular HUD windows above it. A physical-table Companion surface should keep the same character/dice/action tools useful without requiring a digital map. Mixed tables may use both projections at once.
 
-Layouts are presentation state. They must not become authoritative game state.
+The HUD is modular. Containers can be dragged, resized, hidden and configured. Examples include character status, HP/resources, actions, spells, inventory, dice, conditions, initiative, selected target, event log and notes. Layouts are presentation state and must not become authoritative game state.
+
+Local/offline companion play is a valid mode, but local changes must not be silently presented as campaign truth or merged without an explicit synchronization/conflict policy.
 
 ## Homebrew is not a special case
 

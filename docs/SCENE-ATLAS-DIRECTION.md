@@ -48,9 +48,9 @@ The product must not force a user to build a map inside UTT before they can play
 
 ## Relationship to Live
 
-The same scene model can back world navigation and live play. A DM can activate a scene for the table; clients transition to that scene while server-side visibility determines what each participant receives.
+The same scene model can back world navigation and virtual-table play. A DM can activate a scene for the table; Virtual Table clients transition to that scene while server-side visibility will eventually determine what each participant receives. Companion clients may participate in the same session without rendering a scene at all.
 
-Scene switching should therefore be an authoritative live-session operation, while zoom, local HUD layout and similar presentation preferences remain client state.
+Scene switching should therefore be an authoritative live-session operation, while the choice of Play surface, zoom, local HUD layout and similar presentation preferences remain client state.
 
 ## Proven primitive
 

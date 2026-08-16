@@ -12,6 +12,7 @@ Compensating development controls:
 - the database uses a `STRICT` scope and VS001/VS002/VS003 application tables are `SCHEMAFULL`;
 - containers that write durable data run non-root after one-shot volume ownership initialization;
 - no production/user data is used in this environment.
+- Offline Companion state (current HP, local dice result and local event log) is stored in browser `localStorage`; it is neither encrypted nor synchronized and must not be used for secrets or treated as campaign-authoritative storage.
 
 ## Known security limitation
 

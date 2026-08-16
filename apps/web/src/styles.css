@@ -365,3 +365,62 @@ button { color: inherit; }
   .freeform-surface:not(.overlay) { min-width: 980px; min-height: 680px; }
   .director-freeform { display: none; }
 }
+
+/* VS003.6 — unified Play surface */
+.play-workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #07090d; }
+.play-toolbar {
+  position: relative; z-index: 45; min-height: 54px; display: grid; grid-template-columns: minmax(210px,1fr) auto minmax(210px,1fr);
+  align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(10,12,17,.96);
+}
+.play-mode-switch, .companion-source-switch { display: flex; width: max-content; gap: 3px; padding: 3px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(255,255,255,.025); }
+.play-mode-switch button, .companion-source-switch button { border: 0; border-radius: 6px; padding: 6px 10px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
+.play-mode-switch button.active, .companion-source-switch button.active { color: #f0dfc4; background: rgba(197,156,91,.14); }
+.play-mode-switch button:disabled, .companion-source-switch button:disabled { opacity: .35; cursor: not-allowed; }
+.play-toolbar-status { display: flex; align-items: center; justify-content: center; gap: 8px; color: #9198a4; font-size: 10px; }
+.play-toolbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
+.play-toolbar-actions .ghost-button { padding: 6px 9px; font-size: 10px; }
+.play-connection-note { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid rgba(217,97,97,.18); background: rgba(217,97,97,.06); color: #ca9191; font-size: 10px; }
+.play-connection-note button { border: 0; background: transparent; color: #efb4b4; cursor: pointer; text-decoration: underline; }
+.play-table-stage { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; background: #06080b; }
+.play-table-stage > .scene-viewport { flex: 1; min-height: 0; }
+.play-scene-title { position: absolute; z-index: 23; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(7,9,13,.8); backdrop-filter: blur(10px); pointer-events: none; }
+.play-scene-title span { color: #777f8b; font-size: 8px; letter-spacing: .11em; text-transform: uppercase; }
+.play-scene-title strong { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e6dfd4; font: 500 13px Georgia, serif; }
+.play-hud-freeform { z-index: 25 !important; }
+.play-hud-freeform .hud-widget { background: linear-gradient(165deg, rgba(20,24,32,.90), rgba(10,12,17,.86)); backdrop-filter: blur(10px); }
+.play-hud-freeform .widget-handle { min-height: 52px; padding: 8px 11px; }
+.play-hud-freeform .widget-handle h2 { font-size: 15px; }
+.play-hud-freeform .widget-body { padding: 11px; gap: 10px; }
+.play-mobile-hud { display: none; }
+.play-table-loading, .play-unavailable { flex: 1; display: grid; place-content: center; gap: 8px; padding: 28px; text-align: center; color: var(--muted); }
+.play-table-loading strong, .play-unavailable h1 { margin: 0; color: #dfd9cf; font: 500 22px Georgia, serif; }
+.play-table-loading span, .play-unavailable p { margin: 0; font-size: 11px; }
+.play-unavailable .sigil { margin: 0 auto 8px; width: 58px; height: 58px; display: grid; place-items: center; border: 1px solid rgba(197,156,91,.35); border-radius: 18px; color: var(--bronze-soft); font-family: Georgia, serif; }
+.play-unavailable .game-button { margin: 8px auto 0; min-width: 150px; padding: 9px 12px; }
+
+@media (max-width: 980px) {
+  .play-toolbar { grid-template-columns: auto 1fr; }
+  .play-toolbar-status { justify-content: flex-end; }
+  .play-toolbar-actions { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; padding-bottom: 1px; }
+}
+
+@media (max-width: 720px) {
+  .play-toolbar { grid-template-columns: 1fr auto; min-height: 50px; padding: 6px 8px; gap: 7px; }
+  .play-mode-switch button { padding: 6px 8px; }
+  .play-toolbar-status { font-size: 9px; }
+  .play-toolbar-actions { grid-column: 1 / -1; gap: 5px; }
+  .companion-source-switch button { padding: 5px 7px; font-size: 9px; }
+  .play-table-stage { min-height: 520px; }
+  .play-scene-title { top: 48px; max-width: 62vw; }
+  .play-hud-freeform { display: none; }
+  .play-mobile-hud { position: absolute; z-index: 32; inset: auto 8px 8px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+  .play-mobile-widget { max-height: 42vh; pointer-events: auto; overflow: hidden; }
+  .play-mobile-widget > .hud-widget { max-height: 42vh; border-radius: 12px; background: linear-gradient(165deg, rgba(20,24,32,.95), rgba(10,12,17,.94)); backdrop-filter: blur(12px); }
+  .play-mobile-widget .widget-handle { min-height: 48px; padding: 7px 10px; cursor: default; }
+  .play-mobile-widget .widget-handle h2 { font-size: 15px; }
+  .play-mobile-widget .widget-body { padding: 10px; gap: 9px; }
+  .play-mobile-dock { align-self: center; display: flex; gap: 3px; padding: 3px; border: 1px solid rgba(255,255,255,.10); border-radius: 10px; background: rgba(8,10,14,.94); backdrop-filter: blur(12px); pointer-events: auto; }
+  .play-mobile-dock button { border: 0; border-radius: 7px; padding: 7px 11px; background: transparent; color: #8d949f; font-size: 10px; }
+  .play-mobile-dock button.active { color: #f2e4cb; background: rgba(197,156,91,.16); }
+  .play-workspace .hud-stage.freeform-mode { overflow-x: auto; }
+}

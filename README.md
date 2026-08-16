@@ -38,6 +38,14 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - optimistic token movement held until authoritative confirmation, removing accepted-move rubber-band;
 - contextual map popovers for scene/lore hotspots.
 
+**Vertical Slice 003.6** unifies the actual play experience:
+
+- Virtual Table uses the active scene/map + synchronized tokens as the base live surface;
+- the same Character/Dice/Log widgets float above the map;
+- Companion preserves a map-free surface for physical play;
+- Companion can use connected campaign state or explicit browser-local offline state;
+- mobile Virtual Table uses a compact HUD drawer so the map remains visible.
+
 Walls/doors, fog/vision, initiative/targeting, travel rules, hex-map generation, auth/roles, secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
 
 ## Development architecture
@@ -57,6 +65,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-002.md` — Scene Atlas foundation evidence
 - `docs/VERTICAL-SLICE-003.md` — authoritative token foundation evidence
 - `docs/VERTICAL-SLICE-003-5.md` — freeform workspace and interaction stabilization evidence
+- `docs/VERTICAL-SLICE-003-6.md` — unified Virtual Table / Companion evidence
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
 - `docs/RUNBOOK.md` — operator/developer commands
