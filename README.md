@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Under The Table — next foundation
 
-## Getting Started
+Under The Table is a session-first, game-like tabletop runtime. D&D 2024 is the first ruleset, not a hard-coded assumption in the core.
 
-First, run the development server:
+The product goal is one continuous tool for world building, lore, scene navigation, characters and live play. Complexity should be progressive: a user may start from a combat test, image, city, lore entry or other useful artifact and grow outward only when needed.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Current milestone
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Vertical Slice 001** proved the authoritative live foundation: synchronized Colyseus room state, server-side dice/HP transitions, durable events/snapshots, restart recovery and a private Tailscale preview.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Vertical Slice 002** proves the Scene Atlas primitive:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- persistent blank/image/combat scenes;
+- optional square/hex grids;
+- persistent image backgrounds outside the database;
+- local pan/zoom and private director browsing;
+- normalized scene hotspots;
+- scene-to-scene links and player-safe lore summaries;
+- create-linked-scene + lore directly from a pin;
+- authoritative `Present to table`;
+- follower refresh when a newly-created scene becomes live;
+- active-scene recovery after game-server restart.
 
-## Learn More
+**Vertical Slice 003** turns that Atlas into a shared tabletop surface:
 
-To learn more about Next.js, take a look at the following resources:
+- durable player/NPC/object scene tokens;
+- direct token placement from the map;
+- server-authoritative drag/movement;
+- active-scene token synchronization through Colyseus;
+- token persistence/recovery through SurrealDB;
+- provisional claimed-player ownership semantics without pretending client names are authentication.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Walls/doors, fog/vision, initiative/targeting, travel rules, hex-map generation, auth/roles, secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Development architecture
 
-## Deploy on Vercel
+`browser -> Nginx gateway -> Colyseus / game HTTP API -> SurrealDB + private asset volume`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Only the gateway is published to the homelab Tailscale address. SurrealDB, Colyseus and the asset volume stay private to Compose. The homelab enables this development architecture but is not a product dependency.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Canonical project docs
+
+- `AGENTS.md` — rules for future engineering agents
+- `docs/VISION.md` — product direction and non-negotiable principles
+- `docs/ARCHITECTURE.md` — current implemented technical boundaries
+- `docs/SCENE-ATLAS-DIRECTION.md` — Atlas/map/lore direction beyond the proven primitive
+- `docs/HOMELAB-DEVELOPMENT.md` — why the homelab changed feasible choices
+- `docs/VERTICAL-SLICE-001.md` — live-runtime foundation evidence
+- `docs/VERTICAL-SLICE-002.md` — Scene Atlas foundation evidence
+- `docs/VERTICAL-SLICE-003.md` — authoritative token foundation evidence
+- `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
+- `docs/adr/` — architecture decision records
+- `docs/RUNBOOK.md` — operator/developer commands
+
+## Legacy
+
+`under-the-table-v0.0.4` is reference material only. No source, schema or dependency from it is inherited automatically.
