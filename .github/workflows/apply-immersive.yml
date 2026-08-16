@@ -1,0 +1,48 @@
+name: apply immersive virtual table patch
+
+on:
+  push:
+    branches:
+      - play/virtual-table-fullscreen
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact local patch
+        run: |
+          git apply --check .github/immersive.patch
+          git apply .github/immersive.patch
+          rm .github/immersive.patch .github/workflows/apply-immersive.yml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify project
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm check
+
+      - name: Verify exact tree and publish
+        env:
+          EXPECTED_TREE: 4592e11a2f42cb28dceee7de07758b63d04044d5
+        run: |
+          git add -A
+          ACTUAL_TREE=$(git write-tree)
+          echo "tree=$ACTUAL_TREE"
+          test "$ACTUAL_TREE" = "$EXPECTED_TREE"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "feat: add immersive virtual table controls"
+          git push origin HEAD:play/virtual-table-fullscreen
