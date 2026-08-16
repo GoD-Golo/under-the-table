@@ -1,0 +1,791 @@
+From 6b03ffd40caa5f1d8dacf3aeb4c3137b30c6f216 Mon Sep 17 00:00:00 2001
+From: GoD-Golo <153520055+GoD-Golo@users.noreply.github.com>
+Date: Sun, 16 Aug 2026 08:59:02 +0300
+Subject: [PATCH] feat: add simple fog reveal placeholder
+
+---
+ README.md                                     | 10 +++-
+ .../src/persistence/surreal-store.ts          | 55 +++++++++++++++++++
+ .../src/rooms/vertical-slice-room.ts          | 34 +++++++++++-
+ apps/web/src/App.tsx                          |  2 +-
+ apps/web/src/components/AtlasWorkspace.tsx    | 24 ++++++--
+ apps/web/src/components/PlayWorkspace.tsx     |  2 +
+ apps/web/src/components/SceneCanvas.tsx       | 48 +++++++++++++++-
+ apps/web/src/live-room.ts                     | 16 ++++++
+ apps/web/src/offline-companion.ts             |  2 +
+ apps/web/src/styles.css                       | 14 +++++
+ docs/ARCHITECTURE.md                          | 15 ++---
+ docs/SECURITY.md                              |  6 +-
+ docs/VERTICAL-SLICE-003-7.md                  | 32 +++++++++++
+ docs/adr/0016-simple-fog-placeholder.md       | 25 +++++++++
+ packages/domain/src/scene.test.ts             |  8 ++-
+ packages/domain/src/scene.ts                  | 17 ++++++
+ packages/protocol/src/messages.ts             |  6 +-
+ packages/protocol/src/state.ts                |  2 +
+ 18 files changed, 295 insertions(+), 23 deletions(-)
+ create mode 100644 docs/VERTICAL-SLICE-003-7.md
+ create mode 100644 docs/adr/0016-simple-fog-placeholder.md
+
+diff --git a/README.md b/README.md
+index 860c5a1..37388eb 100644
+--- a/README.md
++++ b/README.md
+@@ -47,7 +47,14 @@ The product goal is one continuous tool for world building, lore, scene navigati
+ - Companion can use connected campaign state or explicit browser-local offline state;
+ - mobile Virtual Table uses a compact HUD drawer so the map remains visible.
+ 
+-Walls/doors, fog/vision, initiative/targeting, travel rules, hex-map generation, auth/roles, secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
++**Vertical Slice 003.7** adds a deliberately small fog placeholder:
++
++- Director toggles fog and reveals/coats fixed cells on the active scene;
++- fog state is live-synchronized and persists across restart;
++- covered Play cells suppress token rendering/interaction;
++- this is explicitly visual UX, not secure player-secret delivery.
++
++Walls/doors, dynamic vision/LOS, initiative/targeting, travel rules, hex-map generation, auth/roles, secure visibility/secret-lore authorization and the Content/Character/Action/Effect engines remain intentionally separate milestones.
+ 
+ ## Development architecture
+ 
+@@ -67,6 +74,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
+ - `docs/VERTICAL-SLICE-003.md` — authoritative token foundation evidence
+ - `docs/VERTICAL-SLICE-003-5.md` — freeform workspace and interaction stabilization evidence
+ - `docs/VERTICAL-SLICE-003-6.md` — unified Virtual Table / Companion evidence
++- `docs/VERTICAL-SLICE-003-7.md` — simple fog placeholder evidence
+ - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
+ - `docs/adr/` — architecture decision records
+ - `docs/RUNBOOK.md` — operator/developer commands
+diff --git a/apps/game-server/src/persistence/surreal-store.ts b/apps/game-server/src/persistence/surreal-store.ts
+index dadeaaf..0207601 100644
+--- a/apps/game-server/src/persistence/surreal-store.ts
++++ b/apps/game-server/src/persistence/surreal-store.ts
+@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
+ import { RecordId, Surreal, Table } from "surrealdb";
+ import {
+   STARTER_SCENE_ID,
++  normalizeFogCell,
+   normalizeGrid,
+   normalizeHotspotCoordinate,
+   normalizeLoreSummary,
+@@ -13,6 +14,7 @@ import {
+   type GameEvent,
+   type RecentEvent,
+   type Scene,
++  type SceneFog,
+   type SceneHotspot,
+   type SceneToken,
+   type SessionSnapshot,
+@@ -65,6 +67,15 @@ interface HotspotRecord {
+   updated_at: string;
+ }
+ 
++
++interface FogRecord {
++  [key: string]: unknown;
++  scene_id: string;
++  enabled: boolean;
++  revealed_cells: string[];
++  updated_at: string;
++}
++
+ interface TokenRecord {
+   [key: string]: unknown;
+   token_id: string;
+@@ -144,6 +155,13 @@ DEFINE FIELD IF NOT EXISTS controller_name ON TABLE scene_token TYPE option<stri
+ DEFINE FIELD IF NOT EXISTS created_at ON TABLE scene_token TYPE string;
+ DEFINE FIELD IF NOT EXISTS updated_at ON TABLE scene_token TYPE string;
+ DEFINE INDEX IF NOT EXISTS scene_token_scene ON TABLE scene_token FIELDS scene_id;
++
++DEFINE TABLE IF NOT EXISTS scene_fog SCHEMAFULL;
++DEFINE FIELD IF NOT EXISTS scene_id ON TABLE scene_fog TYPE string;
++DEFINE FIELD IF NOT EXISTS enabled ON TABLE scene_fog TYPE bool;
++DEFINE FIELD IF NOT EXISTS revealed_cells ON TABLE scene_fog TYPE array<string>;
++DEFINE FIELD IF NOT EXISTS updated_at ON TABLE scene_fog TYPE string;
++DEFINE INDEX IF NOT EXISTS scene_fog_scene ON TABLE scene_fog FIELDS scene_id UNIQUE;
+ COMMIT TRANSACTION;
+ `;
+ 
+@@ -230,6 +248,14 @@ function mapToken(record: TokenRecord): SceneToken {
+   };
+ }
+ 
++function mapFog(record: FogRecord): SceneFog {
++  return { sceneId: record.scene_id, enabled: record.enabled, revealedCells: [...record.revealed_cells], updatedAt: record.updated_at };
++}
++
++function emptyFog(sceneId: string): SceneFog {
++  return { sceneId, enabled: false, revealedCells: [], updatedAt: new Date(0).toISOString() };
++}
++
+ function defaultGridFor(kind: Scene["kind"]): Scene["grid"] {
+   return kind === "combat_test"
+     ? { kind: "square", size: 64, visible: true }
+@@ -367,6 +393,35 @@ export class SurrealStore {
+     return (records ?? []).map(mapToken);
+   }
+ 
++  async getSceneFog(sceneId: string): Promise<SceneFog> {
++    await this.connect();
++    const record = await this.db.select<FogRecord>(new RecordId("scene_fog", sceneId));
++    return record ? mapFog(record) : emptyFog(sceneId);
++  }
++
++  async setSceneFogEnabled(sceneId: string, enabled: boolean): Promise<SceneFog> {
++    await this.connect();
++    if (!await this.getScene(sceneId)) throw new Error("scene not found");
++    const current = await this.getSceneFog(sceneId);
++    const record = await this.db.upsert<FogRecord>(new RecordId("scene_fog", sceneId)).content({
++      scene_id: sceneId, enabled: Boolean(enabled), revealed_cells: current.revealedCells, updated_at: new Date().toISOString()
++    });
++    return mapFog(record);
++  }
++
++  async setSceneFogCell(sceneId: string, column: unknown, row: unknown, revealed: boolean): Promise<SceneFog> {
++    await this.connect();
++    if (!await this.getScene(sceneId)) throw new Error("scene not found");
++    const key = normalizeFogCell(column, row);
++    const current = await this.getSceneFog(sceneId);
++    const cells = new Set(current.revealedCells);
++    if (revealed) cells.add(key); else cells.delete(key);
++    const record = await this.db.upsert<FogRecord>(new RecordId("scene_fog", sceneId)).content({
++      scene_id: sceneId, enabled: current.enabled, revealed_cells: [...cells].sort(), updated_at: new Date().toISOString()
++    });
++    return mapFog(record);
++  }
++
+   async createScene(input: CreateSceneInput): Promise<Scene> {
+     await this.connect();
+     const name = normalizeSceneName(input.name);
+diff --git a/apps/game-server/src/rooms/vertical-slice-room.ts b/apps/game-server/src/rooms/vertical-slice-room.ts
+index c54627a..68020ba 100644
+--- a/apps/game-server/src/rooms/vertical-slice-room.ts
++++ b/apps/game-server/src/rooms/vertical-slice-room.ts
+@@ -16,7 +16,9 @@ import {
+   type JoinOptions,
+   type MoveTokenCommand,
+   type PresentSceneCommand,
+-  type RollCommand
++  type RollCommand,
++  type SetFogCellCommand,
++  type SetFogEnabledCommand
+ } from "@utt/protocol";
+ import { surrealStore } from "../persistence/surreal-store.js";
+ import { createHpEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent } from "../session-logic.js";
+@@ -68,6 +70,7 @@ export class VerticalSliceRoom extends Room {
+     const snapshot = await surrealStore.loadSnapshot(SESSION_ID);
+     if (snapshot) this.restoreSnapshot(snapshot);
+     this.replaceTokens(await surrealStore.listSceneTokens(this.state.activeSceneId));
++    this.replaceFog(await surrealStore.getSceneFog(this.state.activeSceneId));
+     console.info(`[room] created ${this.roomId}; restored sequence=${snapshot?.sequence ?? 0}, hp=${this.state.hp}`);
+ 
+     this.onMessage(MESSAGE.roll, (client, message: RollCommand) => {
+@@ -85,6 +88,12 @@ export class VerticalSliceRoom extends Room {
+     this.onMessage(MESSAGE.moveToken, (client, message: MoveTokenCommand) => {
+       this.enqueue(client, () => this.handleMoveToken(client, message));
+     });
++    this.onMessage(MESSAGE.setFogEnabled, (client, message: SetFogEnabledCommand) => {
++      this.enqueue(client, () => this.handleSetFogEnabled(client, message));
++    });
++    this.onMessage(MESSAGE.setFogCell, (client, message: SetFogCellCommand) => {
++      this.enqueue(client, () => this.handleSetFogCell(client, message));
++    });
+   }
+ 
+   onJoin(client: Client, options: JoinOptions): void {
+@@ -117,6 +126,12 @@ export class VerticalSliceRoom extends Room {
+     for (const token of tokens) this.state.tokens.set(token.id, tokenToState(token));
+   }
+ 
++  private replaceFog(fog: { enabled: boolean; revealedCells: string[] }): void {
++    this.state.fogEnabled = fog.enabled;
++    this.state.fogRevealedCells.clear();
++    for (const cell of fog.revealedCells) this.state.fogRevealedCells.push(cell);
++  }
++
+   private async handleCreateToken(client: Client, command: CreateTokenCommand): Promise<void> {
+     if (typeof command?.sceneId !== "string" || !command.sceneId) throw new Error("sceneId is required");
+     const kind = normalizeTokenKind(command.kind);
+@@ -157,6 +172,20 @@ export class VerticalSliceRoom extends Room {
+     this.applyAcceptedEvent(event);
+   }
+ 
++  private async handleSetFogEnabled(_client: Client, command: SetFogEnabledCommand): Promise<void> {
++    if (typeof command?.sceneId !== "string" || command.sceneId !== this.state.activeSceneId) throw new Error("fog can only be edited on the active scene");
++    if (typeof command.enabled !== "boolean") throw new Error("fog enabled must be boolean");
++    const fog = await surrealStore.setSceneFogEnabled(command.sceneId, command.enabled);
++    this.replaceFog(fog);
++  }
++
++  private async handleSetFogCell(_client: Client, command: SetFogCellCommand): Promise<void> {
++    if (typeof command?.sceneId !== "string" || command.sceneId !== this.state.activeSceneId) throw new Error("fog can only be edited on the active scene");
++    if (typeof command.revealed !== "boolean") throw new Error("fog revealed must be boolean");
++    const fog = await surrealStore.setSceneFogCell(command.sceneId, command.column, command.row, command.revealed);
++    this.replaceFog(fog);
++  }
++
+   private async handleRoll(client: Client, command: RollCommand): Promise<void> {
+     const sequence = this.state.eventSequence + 1;
+     const { event, roll } = createRollEvent({
+@@ -195,11 +224,12 @@ export class VerticalSliceRoom extends Room {
+       sceneId: scene.id,
+       sceneName: scene.name
+     });
+-    const sceneTokens = await surrealStore.listSceneTokens(scene.id);
++    const [sceneTokens, sceneFog] = await Promise.all([surrealStore.listSceneTokens(scene.id), surrealStore.getSceneFog(scene.id)]);
+     const snapshot = this.nextSnapshot(event, this.currentRoll(), this.state.hp, scene.id);
+     await surrealStore.persist(event, snapshot);
+     this.state.activeSceneId = scene.id;
+     this.replaceTokens(sceneTokens);
++    this.replaceFog(sceneFog);
+     this.applyAcceptedEvent(event);
+   }
+ 
+diff --git a/apps/web/src/App.tsx b/apps/web/src/App.tsx
+index 3b7567c..c17d7a7 100644
+--- a/apps/web/src/App.tsx
++++ b/apps/web/src/App.tsx
+@@ -38,7 +38,7 @@ export function App() {
+       {view === "director" && live.error ? <div className="error-banner"><span>{live.error}</span><button type="button" onClick={live.reconnect}>Reconnect</button></div> : null}
+ 
+       {view === "director" ? (
+-        campaignState ? <AtlasWorkspace activeSceneId={campaignState.activeSceneId} liveTokens={campaignState.tokens} clientName={live.clientName} tokenRevision={campaignState.events[campaignState.events.length - 1]?.kind.startsWith("token_") ? campaignState.eventSequence : 0} onPresentScene={live.presentScene} onCreateToken={live.createToken} onMoveToken={live.moveToken} /> : <main className="connecting-screen"><div className="sigil">UTT</div><h1>Opening the director table…</h1><p>Director needs the authoritative campaign runtime.</p><button className="game-button primary" type="button" onClick={() => setView("play")}>Use Play offline</button>{live.status === "disconnected" ? <button className="ghost-button" type="button" onClick={live.reconnect}>Try campaign again</button> : null}</main>
++        campaignState ? <AtlasWorkspace activeSceneId={campaignState.activeSceneId} liveTokens={campaignState.tokens} clientName={live.clientName} tokenRevision={campaignState.events[campaignState.events.length - 1]?.kind.startsWith("token_") ? campaignState.eventSequence : 0} onPresentScene={live.presentScene} onCreateToken={live.createToken} onMoveToken={live.moveToken} fogEnabled={campaignState.fogEnabled} fogRevealedCells={campaignState.fogRevealedCells} onSetFogEnabled={live.setFogEnabled} onSetFogCell={live.setFogCell} /> : <main className="connecting-screen"><div className="sigil">UTT</div><h1>Opening the director table…</h1><p>Director needs the authoritative campaign runtime.</p><button className="game-button primary" type="button" onClick={() => setView("play")}>Use Play offline</button>{live.status === "disconnected" ? <button className="ghost-button" type="button" onClick={live.reconnect}>Try campaign again</button> : null}</main>
+       ) : (
+         <PlayWorkspace campaignState={campaignState} clientName={live.clientName} connectionStatus={live.status} connectionError={live.error} onRoll={live.roll} onAdjustHp={live.adjustHp} onMoveToken={live.moveToken} onReconnect={live.reconnect} onImmersiveChange={setImmersivePlay} />
+       )}
+diff --git a/apps/web/src/components/AtlasWorkspace.tsx b/apps/web/src/components/AtlasWorkspace.tsx
+index 70a2158..635c765 100644
+--- a/apps/web/src/components/AtlasWorkspace.tsx
++++ b/apps/web/src/components/AtlasWorkspace.tsx
+@@ -12,6 +12,10 @@ interface AtlasWorkspaceProps {
+   onPresentScene: (sceneId: string) => void;
+   onCreateToken: (command: { sceneId: string; kind: "player" | "npc" | "object"; label: string; x: number; y: number; claim?: boolean }) => void;
+   onMoveToken: (tokenId: string, x: number, y: number) => void;
++  fogEnabled: boolean;
++  fogRevealedCells: string[];
++  onSetFogEnabled: (sceneId: string, enabled: boolean) => void;
++  onSetFogCell: (sceneId: string, column: number, row: number, revealed: boolean) => void;
+ }
+ 
+ function kindLabel(kind: AtlasSceneDto["kind"]): string {
+@@ -153,7 +157,7 @@ function CreateTokenSheet({ point, scene, clientName, onClose, onCreate }: {
+   );
+ }
+ 
+-export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRevision, onPresentScene, onCreateToken, onMoveToken }: AtlasWorkspaceProps) {
++export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRevision, onPresentScene, onCreateToken, onMoveToken, fogEnabled, fogRevealedCells, onSetFogEnabled, onSetFogCell }: AtlasWorkspaceProps) {
+   const atlas = useAtlas();
+   const uploadRef = useRef<HTMLInputElement>(null);
+   const [browseSceneId, setBrowseSceneId] = useState<string | null>(null);
+@@ -161,6 +165,7 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
+   const [followTable, setFollowTable] = useState(true);
+   const [addPinMode, setAddPinMode] = useState(false);
+   const [addTokenMode, setAddTokenMode] = useState(false);
++  const [fogRevealMode, setFogRevealMode] = useState(false);
+   const [pendingPoint, setPendingPoint] = useState<{ x: number; y: number } | null>(null);
+   const [pendingTokenPoint, setPendingTokenPoint] = useState<{ x: number; y: number } | null>(null);
+   const [createKind, setCreateKind] = useState<AtlasSceneDto["kind"] | null>(null);
+@@ -204,6 +209,7 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
+     setSelectedHotspotId(null);
+     setAddPinMode(false);
+     setAddTokenMode(false);
++    setFogRevealMode(false);
+     setFollowTable(sceneId === activeSceneId);
+   };
+ 
+@@ -242,6 +248,10 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
+ 
+       <div className="scene-column">
+         <div className="scene-context-bar"><div><span>{scene.id === activeSceneId ? "Live scene" : "Browsing privately"}</span><strong>{scene.name}</strong></div><div className="context-actions">
++          {scene.id === activeSceneId ? <>
++            <button className={`ghost-button ${fogEnabled ? "active" : ""}`} type="button" onClick={() => { onSetFogEnabled(scene.id, !fogEnabled); if (fogEnabled) setFogRevealMode(false); }}>Fog {fogEnabled ? "on" : "off"}</button>
++            {fogEnabled ? <button className={`ghost-button ${fogRevealMode ? "active" : ""}`} type="button" onClick={() => { setAddPinMode(false); setAddTokenMode(false); setFogRevealMode((value) => !value); }}>{fogRevealMode ? "Done reveal" : "Reveal fog"}</button> : null}
++          </> : null}
+           <button className={`ghost-button ${showDirectorWidgets ? "active" : ""}`} type="button" onClick={() => setShowDirectorWidgets((value) => !value)}>{showDirectorWidgets ? "Hide DM widgets" : "DM widgets"}</button>
+           {showDirectorWidgets ? <button className="ghost-button" type="button" onClick={() => setDirectorResetToken((value) => value + 1)}>Reset DM layout</button> : null}
+           {!followTable && activeScene ? <button className="ghost-button" type="button" onClick={() => { setFollowTable(true); browse(activeScene.id); }}>Follow table</button> : null}
+@@ -253,15 +263,19 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
+           selectedHotspotLore={hotspotEntity?.summary ?? null}
+           selectedHotspotLinkedSceneName={linkedScene?.name ?? null}
+           addPinMode={addPinMode} addTokenMode={addTokenMode}
+-          onToggleAddPin={() => { setAddTokenMode(false); setAddPinMode((value) => !value); }}
+-          onToggleAddToken={() => { setAddPinMode(false); setAddTokenMode((value) => !value); }}
++          onToggleAddPin={() => { setAddTokenMode(false); setFogRevealMode(false); setAddPinMode((value) => !value); }}
++          onToggleAddToken={() => { setAddPinMode(false); setFogRevealMode(false); setAddTokenMode((value) => !value); }}
+           onCanvasPoint={(point) => { setPendingPoint(point); setAddPinMode(false); }}
+           onTokenPoint={(point) => { setPendingTokenPoint(point); setAddTokenMode(false); }}
+           onHotspotSelect={(hotspot) => setSelectedHotspotId(hotspot.id)}
+           onHotspotEnter={(hotspot) => { const target = scenes.find((item) => item.id === hotspot.linkedSceneId); if (target) browse(target.id); }}
+           onTokenMove={onMoveToken}
++          fogEnabled={scene.id === activeSceneId ? fogEnabled : false}
++          fogRevealedCells={scene.id === activeSceneId ? fogRevealedCells : []}
++          fogRevealMode={fogRevealMode}
++          onFogCell={(column, row, revealed) => { if (scene.id === activeSceneId) onSetFogCell(scene.id, column, row, revealed); }}
+         />
+-        {showDirectorWidgets ? (
++        {showDirectorWidgets && !fogRevealMode ? (
+           <DirectorOverlay
+             scene={scene}
+             activeScene={activeScene}
+@@ -281,7 +295,7 @@ export function AtlasWorkspace({ activeSceneId, liveTokens, clientName, tokenRev
+         <section className="inspector-section"><div className="section-title-row"><h3>Hotspots</h3><button type="button" onClick={() => setAddPinMode(true)}>+ Add</button></div>{hotspots.length ? <p>{hotspots.length} linked point{hotspots.length === 1 ? "" : "s"} on this scene.</p> : <p>Place a pin to connect this scene to another place, scene or lore entry.</p>}</section>
+         {selectedHotspot ? <section className="hotspot-inspector"><span className="inspector-kicker">Selected hotspot</span><h3>{selectedHotspot.label}</h3>{hotspotEntity ? <p>{hotspotEntity.summary}</p> : <p className="muted-copy">No lore summary attached.</p>}<div className="stack-actions">{linkedScene ? <button className="game-button primary" type="button" onClick={() => browse(linkedScene.id)}>Enter {linkedScene.name}</button> : null}<button className="ghost-button" type="button" onClick={() => setSelectedHotspotId(null)}>Close</button></div></section> : null}
+         {actionError || atlas.error ? <p className="form-error">{actionError ?? atlas.error}</p> : null}
+-        <p className="inspector-note">Director controls are intentionally unpermissioned in this private development slice. Auth/roles remain deferred.</p>
++        <p className="inspector-note">Director controls are intentionally unpermissioned in this private development slice. Placeholder fog is visual UX only, not a security boundary; auth/roles and filtered scene delivery remain deferred.</p>
+       </aside>
+ 
+       {createKind ? <CreateSceneSheet initialKind={createKind} onClose={() => setCreateKind(null)} onCreate={createScene} /> : null}
+diff --git a/apps/web/src/components/PlayWorkspace.tsx b/apps/web/src/components/PlayWorkspace.tsx
+index b9e7b88..00bc5bd 100644
+--- a/apps/web/src/components/PlayWorkspace.tsx
++++ b/apps/web/src/components/PlayWorkspace.tsx
+@@ -70,6 +70,8 @@ function VirtualTable({ state, clientName, onRoll, onAdjustHp, onMoveToken, show
+         selectedHotspotId={null}
+         selectedHotspotLore={null}
+         onTokenMove={onMoveToken}
++        fogEnabled={state.fogEnabled}
++        fogRevealedCells={state.fogRevealedCells}
+       />
+       {showHud ? <>
+         <FreeformSurface items={items} storageKey="utt.play.table.freeform.v1" resetToken={resetToken} overlay className="play-hud-freeform" />
+diff --git a/apps/web/src/components/SceneCanvas.tsx b/apps/web/src/components/SceneCanvas.tsx
+index ff8b090..d3150a6 100644
+--- a/apps/web/src/components/SceneCanvas.tsx
++++ b/apps/web/src/components/SceneCanvas.tsx
+@@ -21,12 +21,45 @@ interface SceneCanvasProps {
+   onHotspotSelect?: (hotspot: AtlasHotspotDto) => void;
+   onHotspotEnter?: (hotspot: AtlasHotspotDto) => void;
+   onTokenMove: (tokenId: string, x: number, y: number) => void;
++  fogEnabled?: boolean;
++  fogRevealedCells?: string[];
++  fogRevealMode?: boolean;
++  onFogCell?: (column: number, row: number, revealed: boolean) => void;
+ }
+ 
+ function clamp(value: number, min: number, max: number): number {
+   return Math.max(min, Math.min(max, value));
+ }
+ 
++const FOG_COLUMNS = 12;
++const FOG_ROWS = 8;
++
++function FogOverlay({ enabled, revealedCells, mode, revealMode, onCell }: {
++  enabled: boolean; revealedCells: string[]; mode: "director" | "play"; revealMode: boolean;
++  onCell: ((column: number, row: number, revealed: boolean) => void) | undefined;
++}) {
++  if (!enabled) return null;
++  const revealed = new Set(revealedCells);
++  const cells = Array.from({ length: FOG_COLUMNS * FOG_ROWS }, (_, index) => {
++    const column = index % FOG_COLUMNS;
++    const row = Math.floor(index / FOG_COLUMNS);
++    const key = `${column}:${row}`;
++    const isRevealed = revealed.has(key);
++    return (
++      <button
++        type="button" key={key}
++        className={`fog-cell ${isRevealed ? "revealed" : "covered"}`}
++        style={{ left: `${column / FOG_COLUMNS * 100}%`, top: `${row / FOG_ROWS * 100}%`, width: `${100 / FOG_COLUMNS}%`, height: `${100 / FOG_ROWS}%` }}
++        tabIndex={mode === "director" && revealMode ? 0 : -1}
++        aria-label={`${isRevealed ? "Cover" : "Reveal"} fog cell ${column + 1}, ${row + 1}`}
++        onPointerDown={(event) => event.stopPropagation()}
++        onClick={(event) => { event.stopPropagation(); if (mode === "director" && revealMode) onCell?.(column, row, !isRevealed); }}
++      />
++    );
++  });
++  return <div className={`fog-layer ${mode} ${revealMode ? "editing" : ""}`} aria-hidden={mode === "play"}>{cells}</div>;
++}
++
+ function GridOverlay({ scene }: { scene: AtlasSceneDto }) {
+   const id = useId().replace(/:/g, "");
+   if (!scene.grid.visible || scene.grid.kind === "none") return null;
+@@ -53,7 +86,8 @@ function GridOverlay({ scene }: { scene: AtlasSceneDto }) {
+ 
+ export function SceneCanvas({
+   scene, hotspots, tokens, clientName, selectedHotspotId, selectedHotspotLore, selectedHotspotLinkedSceneName,
+-  mode = "director", addPinMode = false, addTokenMode = false, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove
++  mode = "director", addPinMode = false, addTokenMode = false, onToggleAddPin, onToggleAddToken, onCanvasPoint, onTokenPoint, onHotspotSelect, onHotspotEnter, onTokenMove,
++  fogEnabled = false, fogRevealedCells = [], fogRevealMode = false, onFogCell
+ }: SceneCanvasProps) {
+   const viewportRef = useRef<HTMLDivElement>(null);
+   const dragRef = useRef<{ pointerId: number; x: number; y: number; cameraX: number; cameraY: number } | null>(null);
+@@ -140,6 +174,13 @@ export function SceneCanvas({
+   }, [draggedToken]);
+ 
+   const canControlToken = (token: AtlasTokenDto) => !token.controllerName || token.controllerName === clientName;
++  const revealedFogCells = new Set(fogRevealedCells);
++  const tokenVisibleThroughFog = (token: AtlasTokenDto) => {
++    if (mode !== "play" || !fogEnabled) return true;
++    const column = Math.min(FOG_COLUMNS - 1, Math.floor(token.x * FOG_COLUMNS));
++    const row = Math.min(FOG_ROWS - 1, Math.floor(token.y * FOG_ROWS));
++    return revealedFogCells.has(`${column}:${row}`);
++  };
+ 
+   const startTokenDrag = (event: ReactPointerEvent<HTMLButtonElement>, token: AtlasTokenDto) => {
+     event.stopPropagation();
+@@ -169,7 +210,7 @@ export function SceneCanvas({
+   };
+ 
+   return (
+-    <section className={`scene-viewport ${mode === "play" ? "play-scene" : ""} ${addPinMode ? "placing-pin" : ""} ${addTokenMode ? "placing-token" : ""}`} ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
++    <section className={`scene-viewport ${mode === "play" ? "play-scene" : ""} ${addPinMode ? "placing-pin" : ""} ${addTokenMode ? "placing-token" : ""} ${fogRevealMode ? "revealing-fog" : ""}`} ref={viewportRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={stopDrag} onPointerCancel={stopDrag}>
+       <div className="scene-toolbar" onPointerDown={(event) => event.stopPropagation()}>
+         <button type="button" className="map-tool" onClick={fit}>Fit</button>
+         <span>{Math.round(camera.scale * 100)}%</span>
+@@ -180,11 +221,13 @@ export function SceneCanvas({
+       </div>
+       {addPinMode ? <div className="placement-hint">Click anywhere on the scene to place a hotspot</div> : null}
+       {addTokenMode ? <div className="placement-hint">Click anywhere on the scene to place a token</div> : null}
++      {fogRevealMode ? <div className="placement-hint">Click fog tiles to reveal or cover them</div> : null}
+       <div className="scene-surface" style={{ width: scene.backgroundWidth, height: scene.backgroundHeight, transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})` }}>
+         {scene.backgroundAssetKey ? <img className="scene-background" src={`/game/assets/${scene.backgroundAssetKey}`} alt="" draggable={false} /> : <div className="blank-scene-art"><span>UTT</span><p>{scene.name}</p></div>}
+         <GridOverlay scene={scene} />
+         <div className="token-layer">
+           {tokens.map((token) => {
++            if (!tokenVisibleThroughFog(token)) return null;
+             const position = draggedToken?.id === token.id ? draggedToken : token;
+             const controlled = canControlToken(token);
+             const size = scene.grid.visible && scene.grid.kind !== "none" ? scene.grid.size * 0.78 : 56;
+@@ -235,6 +278,7 @@ export function SceneCanvas({
+             );
+           })}
+         </div>
++        <FogOverlay enabled={fogEnabled} revealedCells={fogRevealedCells} mode={mode} revealMode={fogRevealMode} onCell={onFogCell} />
+       </div>
+     </section>
+   );
+diff --git a/apps/web/src/live-room.ts b/apps/web/src/live-room.ts
+index 488ee8c..86e55f0 100644
+--- a/apps/web/src/live-room.ts
++++ b/apps/web/src/live-room.ts
+@@ -27,6 +27,8 @@ export interface LiveViewState {
+   eventSequence: number;
+   activeSceneId: string;
+   tokens: LiveTokenView[];
++  fogEnabled: boolean;
++  fogRevealedCells: string[];
+   latestRoll: { sides: number; natural: number; modifier: number; total: number } | null;
+   events: Array<{ sequence: number; kind: string; actor: string; summary: string; at: string }>;
+ }
+@@ -44,6 +46,8 @@ function snapshot(state: LiveRoomState): LiveViewState {
+       id: token.id, sceneId: token.sceneId, kind: token.kind as LiveTokenView["kind"], label: token.label,
+       x: token.x, y: token.y, controllerName: token.controllerName || null
+     })),
++    fogEnabled: state.fogEnabled,
++    fogRevealedCells: Array.from(state.fogRevealedCells),
+     latestRoll: state.latestRollSides > 0 ? {
+       sides: state.latestRollSides,
+       natural: state.latestRollNatural,
+@@ -157,6 +161,16 @@ export function useLiveRoom() {
+     roomRef.current?.send(MESSAGE.moveToken, { tokenId, x, y });
+   }, []);
+ 
++  const setFogEnabled = useCallback((sceneId: string, enabled: boolean) => {
++    setError(null);
++    roomRef.current?.send(MESSAGE.setFogEnabled, { sceneId, enabled });
++  }, []);
++
++  const setFogCell = useCallback((sceneId: string, column: number, row: number, revealed: boolean) => {
++    setError(null);
++    roomRef.current?.send(MESSAGE.setFogCell, { sceneId, column, row, revealed });
++  }, []);
++
+   return {
+     state,
+     status,
+@@ -167,6 +181,8 @@ export function useLiveRoom() {
+     presentScene,
+     createToken,
+     moveToken,
++    setFogEnabled,
++    setFogCell,
+     reconnect: () => setAttempt((value) => value + 1)
+   };
+ }
+diff --git a/apps/web/src/offline-companion.ts b/apps/web/src/offline-companion.ts
+index 9a2db8b..00f2449 100644
+--- a/apps/web/src/offline-companion.ts
++++ b/apps/web/src/offline-companion.ts
+@@ -25,6 +25,8 @@ function offlineState(seed: LiveViewState | null, copied = false): LiveViewState
+     eventSequence: copied ? 1 : 0,
+     activeSceneId: "",
+     tokens: [],
++    fogEnabled: false,
++    fogRevealedCells: [],
+     latestRoll: null,
+     events: copied ? [{ sequence: 1, kind: "offline", actor: "Local", summary: "Copied current campaign character state for offline play", at: now }] : []
+   };
+diff --git a/apps/web/src/styles.css b/apps/web/src/styles.css
+index 22e34ba..186ae50 100644
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -463,3 +463,17 @@ button { color: inherit; }
+   .immersive-table .scene-toolbar { right: 7px; top: 48px; }
+   .immersive-table .play-scene-title { top: 44px; max-width: 55vw; }
+ }
++
++
++/* Simple fog placeholder — fixed reveal cells, intentionally not a security boundary */
++.fog-layer { position: absolute; z-index: 16; inset: 0; pointer-events: none; }
++.fog-cell { position: absolute; margin: 0; padding: 0; border: 0; border-radius: 0; pointer-events: none; transition: background 120ms ease, box-shadow 120ms ease; }
++.fog-layer.play .fog-cell.covered { background: rgba(1, 2, 4, .985); }
++.fog-layer.play .fog-cell.revealed { background: transparent; }
++.fog-layer.director .fog-cell.covered { background: rgba(3, 5, 8, .62); }
++.fog-layer.director .fog-cell.revealed { background: transparent; }
++.fog-layer.director.editing .fog-cell { pointer-events: auto; cursor: crosshair; box-shadow: inset 0 0 0 1px rgba(224,189,130,.14); }
++.fog-layer.director.editing .fog-cell.covered:hover { background: rgba(99,200,189,.28); box-shadow: inset 0 0 0 2px rgba(99,200,189,.55); }
++.fog-layer.director.editing .fog-cell.revealed:hover { background: rgba(217,97,97,.14); box-shadow: inset 0 0 0 2px rgba(217,97,97,.38); }
++.scene-viewport.revealing-fog { cursor: crosshair; }
++.scene-toolbar .map-tool:disabled { opacity: .28; cursor: not-allowed; }
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 610cebb..7cffb9b 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -1,6 +1,6 @@
+ # Architecture
+ 
+-Status: **foundation + Vertical Slice 003.6 unified Play surface**
++Status: **foundation + Vertical Slice 003.7 simple fog placeholder**
+ 
+ ## Boundary model
+ 
+@@ -32,7 +32,7 @@ Colyseus remains authoritative for current table state. SurrealDB owns durable w
+ 
+ ## Current live state
+ 
+-The room contains the VS001 character/roll/HP state, `activeSceneId`, and a synchronized map of tokens for the active scene only. `present_scene` is an authoritative command: the server validates that the target scene exists, persists a `scene_presented` event + updated snapshot, then changes live state. A restarted room restores the active scene from the snapshot.
++The room contains the VS001 character/roll/HP state, `activeSceneId`, a synchronized map of tokens for the active scene only, and the active scene fog placeholder projection (`fogEnabled` + revealed fixed cells). `present_scene` is an authoritative command: the server validates that the target scene exists, persists a `scene_presented` event + updated snapshot, then changes live state. A restarted room restores the active scene from the snapshot.
+ 
+ Director browsing is intentionally **not** authoritative. A client can pan, zoom, select hotspots and browse another scene without moving the table. Clients that follow the table react to `activeSceneId`; if that scene was created after their Atlas snapshot, they refresh durable Atlas data before navigating.
+ 
+@@ -40,20 +40,21 @@ Play is a projection over session state. Virtual Table resolves `activeSceneId`
+ 
+ ## Current durable world model
+ 
+-VS002/VS003 currently use four small `SCHEMAFULL` world tables:
++VS002/VS003.7 currently use five small `SCHEMAFULL` world tables:
+ 
+ - `world_entity` — canonical lore/place identity with a player-safe summary for this slice;
+ - `scene` — visual surface, optional world entity reference, grid config and background asset key;
+ - `scene_hotspot` — normalized point on a scene with optional scene/entity links;
+-- `scene_token` — player/NPC/object placement, normalized coordinates and optional provisional controller.
++- `scene_token` — player/NPC/object placement, normalized coordinates and optional provisional controller;
++- `scene_fog` — active-scene placeholder fog enabled state and fixed revealed-cell keys.
+ 
+ The model deliberately permits partial entities. A scene may exist without lore; a hotspot may be lore-only; a combat scene can later be connected into the world. Creating a hotspot + child scene + optional lore entity is one database transaction.
+ 
+ ## State categories
+ 
+-**Authoritative live state:** HP/roll/event state, presence, `activeSceneId`, and the active scene token projection.
++**Authoritative live state:** HP/roll/event state, presence, `activeSceneId`, the active scene token projection, and active-scene placeholder fog projection.
+ 
+-**Durable world/session state:** scenes, hotspots, lore entities, scene tokens, session events and recovery snapshots.
++**Durable world/session state:** scenes, hotspots, lore entities, scene tokens, scene fog placeholder state, session events and recovery snapshots.
+ 
+ **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
+ 
+@@ -61,4 +62,4 @@ The model deliberately permits partial entities. A scene may exist without lore;
+ 
+ ## Not implemented yet
+ 
+-Token portraits/sizing/rotation, walls, doors, fog/vision, scene permissions, DM-secret lore delivery, initiative/targeting, map drawing, travel automation, the hex-map creator, full lore editing and Content/Character/Action/Effect engines remain future work.
++Token portraits/sizing/rotation, walls, doors, secure/dynamic fog and vision, scene permissions, DM-secret lore delivery, initiative/targeting, map drawing, travel automation, the hex-map creator, full lore editing and Content/Character/Action/Effect engines remain future work.
+diff --git a/docs/SECURITY.md b/docs/SECURITY.md
+index 784a21d..4493350 100644
+--- a/docs/SECURITY.md
++++ b/docs/SECURITY.md
+@@ -1,6 +1,6 @@
+ # Development security posture
+ 
+-The current Vertical Slice 001/002/003 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
++The current Vertical Slice 001 through 003.7 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
+ 
+ Compensating development controls:
+ 
+@@ -9,14 +9,14 @@ Compensating development controls:
+ - SurrealDB and Colyseus are not published directly to the host network;
+ - scene assets are served only through the same private gateway;
+ - uploads are limited to PNG/JPEG/WebP, filenames are server-generated and request size is capped;
+-- the database uses a `STRICT` scope and VS001/VS002/VS003 application tables are `SCHEMAFULL`;
++- the database uses a `STRICT` scope and current application tables are `SCHEMAFULL`;
+ - containers that write durable data run non-root after one-shot volume ownership initialization;
+ - no production/user data is used in this environment.
+ - Offline Companion state (current HP, local dice result and local event log) is stored in browser `localStorage`; it is neither encrypted nor synchronized and must not be used for secrets or treated as campaign-authoritative storage.
+ 
+ ## Known security limitation
+ 
+-All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation and uploads. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. DM-secret notes/visibility and real ownership must not rely on it; identity and authorization need their own design and enforcement.
++All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation, fog reveal and uploads. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. The VS003.7 fog overlay is not a secrecy boundary because scene assets still reach the browser. DM-secret notes/visibility and real ownership must not rely on client-side masking or provisional client names; identity and authorization need their own design and enforcement.
+ 
+ This environment is suitable for a private development preview, not public production.
+
+diff --git a/docs/VERTICAL-SLICE-003-7.md b/docs/VERTICAL-SLICE-003-7.md
+new file mode 100644
+index 0000000..00dee68
+--- /dev/null
++++ b/docs/VERTICAL-SLICE-003-7.md
+@@ -0,0 +1,32 @@
++# Vertical Slice 003.7 — Simple fog placeholder
++
++Status: **complete / proven on homelab — 2026-08-16**.
++
++## Goal
++Provide a minimal DM-reveal loop before moving into Character Foundation, without implementing walls, line-of-sight, lighting or secure player-specific visibility.
++
++## Implemented
++- fixed 12×8 fog cells per scene;
++- fog can be edited only for the authoritative active scene;
++- Director can toggle Fog and enter/exit Reveal mode;
++- Reveal mode temporarily retracts floating DM widgets so the whole map is reachable;
++- clicking a cell toggles revealed/covered state;
++- fog state is server-authoritative, synchronized through Colyseus and persisted in `scene_fog`;
++- scene presentation and game-server restart restore that scene's fog state;
++- Play renders covered cells opaque;
++- Play does not render or allow interaction with tokens located in covered fog cells.
++
++## Evidence
++- two SDK clients converged on Fog ON plus the same revealed cell;
++- after game-server restart, a newly-created room restored fog enabled + revealed cells from SurrealDB;
++- browser QA used separate Director and Play clients on the Tailscale preview;
++- with fog fully covered, Play token projection dropped from 4 visible tokens to 0;
++- revealing the cell containing one token made exactly that token visible again without refresh;
++- 95 covered + 1 revealed cell were observed in Play after the reveal;
++- zero browser console/page errors were recorded.
++
++## Security boundary
++This is **not secure fog of war**. The browser still receives the scene asset, and the current private development environment has no authenticated DM/player roles. A technically capable client could bypass the visual mask. Secure visibility requires role-aware server filtering / asset delivery and remains future work.
++
++## Deferred
++Walls, doors, LOS, dynamic token vision, light sources, polygon fog, secure per-player visibility and vision-based token filtering are intentionally deferred. The next product milestone is Character Foundation.
+diff --git a/docs/adr/0016-simple-fog-placeholder.md b/docs/adr/0016-simple-fog-placeholder.md
+new file mode 100644
+index 0000000..fdb7b33
+--- /dev/null
++++ b/docs/adr/0016-simple-fog-placeholder.md
+@@ -0,0 +1,25 @@
++# ADR 0016 — Simple fog placeholder before full vision
++
++Status: Accepted
++
++## Context
++UTT now has an immersive Virtual Table, but full walls/doors/vision would delay the Character Foundation milestone. We still want a usable DM reveal affordance for current playtests.
++
++## Decision
++Implement a deliberately coarse, fixed-cell fog layer as scene state:
++
++- 12×8 normalized cells independent of map grid type;
++- `scene_fog` persists `enabled` plus revealed cell keys;
++- Colyseus projects fog for the active scene and accepts active-scene-only fog intents;
++- Director controls reveal state; Play consumes the projection;
++- covered Play cells suppress token rendering/interaction.
++
++Fog state is gameplay/UI state, not an authorization mechanism.
++
++## Consequences
++- current playtests get a simple DM reveal loop immediately;
++- fog survives scene switches and room restart;
++- the model can be replaced later without coupling walls/LOS to Character work;
++- fixed cells are intentionally coarse and are not derived from square/hex grid geometry;
++- scene image bytes are still delivered to the client, so this cannot protect secrets;
++- authenticated roles and server-side filtered visibility remain prerequisites for secure fog of war.
+diff --git a/packages/domain/src/scene.test.ts b/packages/domain/src/scene.test.ts
+index 877ef28..50632d7 100644
+--- a/packages/domain/src/scene.test.ts
++++ b/packages/domain/src/scene.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from "vitest";
+-import { normalizeGrid, normalizeHotspotCoordinate, normalizeLoreSummary, normalizeSceneKind, normalizeSceneName } from "./scene.js";
++import { normalizeFogCell, normalizeGrid, normalizeHotspotCoordinate, normalizeLoreSummary, normalizeSceneKind, normalizeSceneName } from "./scene.js";
+ 
+ describe("scene primitives", () => {
+   it("normalizes compact scene names", () => {
+@@ -21,6 +21,12 @@ describe("scene primitives", () => {
+     expect(() => normalizeHotspotCoordinate(1.1)).toThrow();
+   });
+ 
++  it("normalizes fixed placeholder fog cells", () => {
++    expect(normalizeFogCell(3, 5)).toBe("3:5");
++    expect(() => normalizeFogCell(12, 0)).toThrow();
++    expect(() => normalizeFogCell(0, 8)).toThrow();
++  });
++
+   it("bounds lore summaries without requiring lore", () => {
+     expect(normalizeLoreSummary(undefined)).toBe("");
+     expect(normalizeLoreSummary("  Old city gates.  ")).toBe("Old city gates.");
+diff --git a/packages/domain/src/scene.ts b/packages/domain/src/scene.ts
+index 37f1821..b3c8ae5 100644
+--- a/packages/domain/src/scene.ts
++++ b/packages/domain/src/scene.ts
+@@ -2,6 +2,8 @@ export const STARTER_SCENE_ID = "table-landing";
+ 
+ export type SceneKind = "blank" | "image" | "combat_test";
+ export type GridKind = "none" | "square" | "hex";
++export const FOG_COLUMNS = 12;
++export const FOG_ROWS = 8;
+ 
+ export interface SceneGrid {
+   kind: GridKind;
+@@ -31,6 +33,13 @@ export interface Scene {
+   updatedAt: string;
+ }
+ 
++export interface SceneFog {
++  sceneId: string;
++  enabled: boolean;
++  revealedCells: string[];
++  updatedAt: string;
++}
++
+ export interface SceneHotspot {
+   id: string;
+   sceneId: string;
+@@ -73,3 +82,11 @@ export function normalizeLoreSummary(value: unknown): string {
+   if (typeof value !== "string") throw new Error("lore summary must be text");
+   return value.trim().slice(0, 2000);
+ }
++
++export function normalizeFogCell(column: unknown, row: unknown): string {
++  const col = Number(column);
++  const parsedRow = Number(row);
++  if (!Number.isInteger(col) || col < 0 || col >= FOG_COLUMNS) throw new Error(`fog column must be between 0 and ${FOG_COLUMNS - 1}`);
++  if (!Number.isInteger(parsedRow) || parsedRow < 0 || parsedRow >= FOG_ROWS) throw new Error(`fog row must be between 0 and ${FOG_ROWS - 1}`);
++  return `${col}:${parsedRow}`;
++}
+diff --git a/packages/protocol/src/messages.ts b/packages/protocol/src/messages.ts
+index 34e61d9..31623a2 100644
+--- a/packages/protocol/src/messages.ts
++++ b/packages/protocol/src/messages.ts
+@@ -6,7 +6,9 @@ export const MESSAGE = {
+   adjustHp: "adjust_hp",
+   presentScene: "present_scene",
+   createToken: "create_token",
+-  moveToken: "move_token"
++  moveToken: "move_token",
++  setFogEnabled: "set_fog_enabled",
++  setFogCell: "set_fog_cell"
+ } as const;
+ 
+ export interface JoinOptions { clientName?: string }
+@@ -24,6 +26,8 @@ export interface CreateTokenCommand {
+ }
+ 
+ export interface MoveTokenCommand { tokenId: string; x: number; y: number }
++export interface SetFogEnabledCommand { sceneId: string; enabled: boolean }
++export interface SetFogCellCommand { sceneId: string; column: number; row: number; revealed: boolean }
+ 
+ export const SERVER_MESSAGE = { commandError: "command_error" } as const;
+ export interface CommandErrorMessage { message: string }
+diff --git a/packages/protocol/src/state.ts b/packages/protocol/src/state.ts
+index 7c680ae..5dab349 100644
+--- a/packages/protocol/src/state.ts
++++ b/packages/protocol/src/state.ts
+@@ -30,6 +30,8 @@ export class LiveRoomState extends Schema {
+   @type("number") latestRollNatural = 0;
+   @type("number") latestRollModifier = 0;
+   @type("number") latestRollTotal = 0;
++  @type("boolean") fogEnabled = false;
++  @type(["string"]) fogRevealedCells = new ArraySchema<string>();
+   @type([EventState]) events = new ArraySchema<EventState>();
+   @type({ map: TokenState }) tokens = new MapSchema<TokenState>();
+ }
+-- 
+2.39.5
