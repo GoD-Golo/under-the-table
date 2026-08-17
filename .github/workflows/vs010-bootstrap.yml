@@ -1,0 +1,38 @@
+name: VS010 exact-tree bootstrap
+
+on:
+  push:
+    branches:
+      - reliability/live-recovery-vs010
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified VS010 tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "dbd492495888ad53a57b58e62c8b8f2de853efb992f44735f51bb685b1bf89be  .github/bootstrap/vs010.patch.xz" | sha256sum -c -
+          xz -dc .github/bootstrap/vs010.patch.xz > /tmp/vs010.patch
+          git apply --index /tmp/vs010.patch
+          rm -f .github/bootstrap/vs010.patch.xz .github/workflows/vs010-bootstrap.yml
+          rmdir .github/bootstrap 2>/dev/null || true
+          git add -A
+          actual_tree="$(git write-tree)"
+          test "$actual_tree" = "33bb3f25608b576448a281d7cc48a737a2e2cb90"
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm check
+          test "$(git write-tree)" = "33bb3f25608b576448a281d7cc48a737a2e2cb90"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "VS010 — Live Reliability & Recovery"
+          git push origin HEAD:reliability/live-recovery-vs010
