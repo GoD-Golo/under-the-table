@@ -3,6 +3,7 @@ import { readDnd2024Data } from "@utt/rules-dnd2024";
 import type { ProductCampaignDto, ProductCharacterDto, ProductSnapshotDto, ProductTableDto } from "@utt/protocol";
 import { useProductSnapshot } from "../product.js";
 import { BrandLogo } from "./BrandLogo.js";
+import { CharacterLifecycleHome } from "./CharacterLifecycleHome.js";
 
 export type ProductScreen = "home" | "campaigns" | "characters" | "campaign" | "table";
 
@@ -147,19 +148,6 @@ function CampaignHomePage({ data, campaign, onTable, onCharacters, onWorld }: {
   </>;
 }
 
-function CharactersHomePage({ data, onTable }: { data: ProductSnapshotDto; onTable: (id: string) => void }) {
-  return <>
-    <section className="product-page-heading characters-heading"><div><span className="product-kicker">Characters</span><h1>Your characters.</h1><p>Characters are first-class. Campaign versions evolve independently; Tables inside one campaign share the same version.</p></div><div className="character-future-action"><span>Next slice</span><strong>+ Character Identity</strong><small>Level 1 · current build · snapshots</small></div></section>
-    <div className="characters-grid">{data.characters.map((character) => {
-      const campaign = data.campaigns.find((item) => item.id === character.campaignId);
-      return <article className="character-home-card" key={`${character.campaignId}:${character.id}`}>
-        <div className="character-card-top"><div className="character-avatar large">{character.name.slice(0,1)}</div><div><span className="product-kicker">Campaign character</span><h2>{character.name}</h2><CharacterMeta character={character} /></div></div>
-        <div className="character-context"><span>Campaign</span><strong>{campaign?.name ?? "Unknown campaign"}</strong></div>
-        <div className="character-table-tags">{character.tableIds.map((tableId) => { const table = data.tables.find((item) => item.id === tableId); return table ? <button type="button" key={tableId} onClick={() => onTable(tableId)}>{table.name} <span>→</span></button> : null; })}</div>
-      </article>;
-    })}</div>
-  </>;
-}
 function TableHomePage({ data, table, campaign, onCampaign, onWorld, onPlay }: {
   data: ProductSnapshotDto;
   table: ProductTableDto;
@@ -199,7 +187,7 @@ export function ProductExperience(props: ProductExperienceProps) {
   else if (!product.data) content = <EmptyState title="Nothing here yet." copy="The product snapshot is empty." />;
   else if (props.screen === "home") content = <HomePage data={product.data} onCampaign={props.onCampaign} onCampaigns={props.onCampaigns} onCharacters={props.onCharacters} onTable={props.onTable} onPlay={props.onPlay} />;
   else if (props.screen === "campaigns") content = <CampaignsPage data={product.data} onCampaign={props.onCampaign} />;
-  else if (props.screen === "characters") content = <CharactersHomePage data={product.data} onTable={props.onTable} />;
+  else if (props.screen === "characters") content = <CharacterLifecycleHome data={product.data} onTable={props.onTable} onRefresh={product.refresh} />;
   else if (props.screen === "campaign" && campaign) content = <CampaignHomePage data={product.data} campaign={campaign} onTable={props.onTable} onCharacters={props.onCharacters} onWorld={props.onWorld} />;
   else if (props.screen === "table" && table) {
     const parent = product.data.campaigns.find((item) => item.id === table.campaignId) ?? null;

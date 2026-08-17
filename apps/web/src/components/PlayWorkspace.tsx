@@ -19,8 +19,6 @@ interface PlayWorkspaceProps {
   connectionError: string | null;
   onRoll: (sides: number, modifier: number) => void;
   onAdjustHp: (characterId: string, delta: number) => void;
-  onCreateCharacter: (command: { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }) => void;
-  onUpdateCharacter: (command: { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }) => void;
   onRollInitiative: (command: { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }) => void;
   onAdvanceInitiative: () => void;
   onClearInitiative: () => void;
@@ -102,7 +100,7 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
   );
 }
 
-export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onCreateCharacter, onUpdateCharacter, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onImmersiveChange, onExitTable }: PlayWorkspaceProps) {
+export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onImmersiveChange, onExitTable }: PlayWorkspaceProps) {
   const [selectedCharacterId, setSelectedCharacterIdState] = useState<string | null>(() => window.localStorage.getItem("utt.play.character.v1"));
   const offline = useOfflineCompanion(campaignState, selectedCharacterId);
   const [mode, setModeState] = useState<PlayMode>(() => loadPlayMode());
@@ -191,7 +189,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
         </div>
       </header>}
 
-      {characterLibraryOpen && campaignState ? <CharacterLibrary characters={campaignState.characters} selectedCharacterId={selectedCharacterId} onSelect={selectCharacter} onCreate={onCreateCharacter} onUpdate={onUpdateCharacter} onClose={() => setCharacterLibraryOpen(false)} /> : null}
+      {characterLibraryOpen && campaignState ? <CharacterLibrary characters={campaignState.characters} selectedCharacterId={selectedCharacterId} onSelect={selectCharacter} onClose={() => setCharacterLibraryOpen(false)} /> : null}
 
       {connectionError && !campaignState ? <div className="play-connection-note"><span>{connectionError}</span><button type="button" onClick={onReconnect}>Retry campaign</button></div> : null}
 

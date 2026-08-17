@@ -6,8 +6,11 @@ import {
   STARTER_CAMPAIGN_ID,
   STARTER_TABLE_ID,
   STARTER_CHARACTER_ID,
+  STARTER_CHARACTER_IDENTITY_ID,
   STARTER_SCENE_ID,
   normalizeCharacterName,
+  normalizeChangeMessage,
+  normalizePrivateCharacterState,
   normalizeFogCell,
   normalizeGrid,
   normalizeHotspotCoordinate,
@@ -28,6 +31,9 @@ import {
   type TableCharacterMembership,
   type TableMembership,
   type CharacterDefinition,
+  type CharacterIdentity,
+  type CharacterChangeRequest,
+  type CampaignCharacterPrivateState,
   type CharacterResource,
   type CharacterRuntime,
   type GameEvent,
@@ -173,11 +179,38 @@ interface TableMembershipRecord {
   capabilities: string[];
 }
 
+interface CharacterIdentityRecord {
+  [key: string]: unknown;
+  identity_id: string;
+  owner_key: string;
+  display_name: string;
+  ruleset_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface CampaignCharacterMembershipRecord {
   [key: string]: unknown;
   membership_id: string;
   campaign_id: string;
   character_id: string;
+  identity_id?: string | undefined;
+  source_kind?: CampaignCharacterMembership["sourceKind"] | undefined;
+  source_character_id?: string | undefined;
+  created_at?: string | undefined;
+}
+
+interface CharacterChangeRequestRecord {
+  [key: string]: unknown;
+  request_id: string; campaign_id: string; character_id: string; requested_by: string;
+  status: CharacterChangeRequest["status"]; proposed_name: string; proposed_max_hp: number;
+  proposed_ruleset_data: Record<string, unknown>; message: string; base_updated_at: string; created_at: string;
+  resolved_at?: string | undefined; resolved_by?: string | undefined;
+}
+
+interface CampaignCharacterPrivateStateRecord {
+  [key: string]: unknown;
+  state_id: string; campaign_id: string; character_id: string; data: Record<string, unknown>; updated_at: string;
 }
 
 interface TableCharacterMembershipRecord {
@@ -245,11 +278,47 @@ DEFINE FIELD IF NOT EXISTS role_labels ON TABLE table_membership TYPE array<stri
 DEFINE FIELD IF NOT EXISTS capabilities ON TABLE table_membership TYPE array<string>;
 DEFINE INDEX IF NOT EXISTS table_membership_member ON TABLE table_membership FIELDS table_id, member_key UNIQUE;
 
+DEFINE TABLE IF NOT EXISTS character_identity SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS identity_id ON TABLE character_identity TYPE string;
+DEFINE FIELD IF NOT EXISTS owner_key ON TABLE character_identity TYPE string;
+DEFINE FIELD IF NOT EXISTS display_name ON TABLE character_identity TYPE string;
+DEFINE FIELD IF NOT EXISTS ruleset_id ON TABLE character_identity TYPE string;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE character_identity TYPE string;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE character_identity TYPE string;
+
 DEFINE TABLE IF NOT EXISTS campaign_character_membership SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS membership_id ON TABLE campaign_character_membership TYPE string;
 DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE campaign_character_membership TYPE string;
 DEFINE FIELD IF NOT EXISTS character_id ON TABLE campaign_character_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS identity_id ON TABLE campaign_character_membership TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS source_kind ON TABLE campaign_character_membership TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS source_character_id ON TABLE campaign_character_membership TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE campaign_character_membership TYPE option<string>;
 DEFINE INDEX IF NOT EXISTS campaign_character_unique ON TABLE campaign_character_membership FIELDS campaign_id, character_id UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS character_change_request SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS request_id ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS character_id ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS requested_by ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS status ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS proposed_name ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS proposed_max_hp ON TABLE character_change_request TYPE int ASSERT $value > 0;
+DEFINE FIELD IF NOT EXISTS proposed_ruleset_data ON TABLE character_change_request TYPE object FLEXIBLE;
+DEFINE FIELD IF NOT EXISTS message ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS base_updated_at ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE character_change_request TYPE string;
+DEFINE FIELD IF NOT EXISTS resolved_at ON TABLE character_change_request TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS resolved_by ON TABLE character_change_request TYPE option<string>;
+DEFINE INDEX IF NOT EXISTS character_change_request_character ON TABLE character_change_request FIELDS character_id, status;
+
+DEFINE TABLE IF NOT EXISTS campaign_character_private_state SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS state_id ON TABLE campaign_character_private_state TYPE string;
+DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE campaign_character_private_state TYPE string;
+DEFINE FIELD IF NOT EXISTS character_id ON TABLE campaign_character_private_state TYPE string;
+DEFINE FIELD IF NOT EXISTS data ON TABLE campaign_character_private_state TYPE object FLEXIBLE;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE campaign_character_private_state TYPE string;
+DEFINE INDEX IF NOT EXISTS campaign_character_private_unique ON TABLE campaign_character_private_state FIELDS campaign_id, character_id UNIQUE;
 
 DEFINE TABLE IF NOT EXISTS table_character_membership SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS membership_id ON TABLE table_character_membership TYPE string;
@@ -411,8 +480,32 @@ function mapTableMembership(record: TableMembershipRecord): TableMembership {
   return { id: record.membership_id, tableId: record.table_id, memberKey: record.member_key, displayName: record.display_name, roleLabels: [...record.role_labels], capabilities: [...record.capabilities] };
 }
 
+function mapCharacterIdentity(record: CharacterIdentityRecord): CharacterIdentity {
+  return {
+    id: record.identity_id, ownerKey: record.owner_key, displayName: record.display_name, rulesetId: record.ruleset_id,
+    createdAt: record.created_at, updatedAt: record.updated_at
+  };
+}
+
 function mapCampaignCharacterMembership(record: CampaignCharacterMembershipRecord): CampaignCharacterMembership {
-  return { campaignId: record.campaign_id, characterId: record.character_id };
+  if (!record.identity_id || !record.source_kind || !record.created_at) throw new Error("campaign character membership is not lifecycle-ready");
+  return {
+    campaignId: record.campaign_id, characterId: record.character_id, identityId: record.identity_id,
+    sourceKind: record.source_kind, sourceCharacterId: record.source_character_id ?? null, createdAt: record.created_at
+  };
+}
+
+function mapCharacterChangeRequest(record: CharacterChangeRequestRecord): CharacterChangeRequest {
+  return {
+    id: record.request_id, campaignId: record.campaign_id, characterId: record.character_id, requestedBy: record.requested_by,
+    status: record.status, proposedName: record.proposed_name, proposedMaxHp: record.proposed_max_hp,
+    proposedRulesetData: { ...record.proposed_ruleset_data }, message: record.message, baseUpdatedAt: record.base_updated_at, createdAt: record.created_at,
+    resolvedAt: record.resolved_at ?? null, resolvedBy: record.resolved_by ?? null
+  };
+}
+
+function mapCampaignCharacterPrivateState(record: CampaignCharacterPrivateStateRecord): CampaignCharacterPrivateState {
+  return { campaignId: record.campaign_id, characterId: record.character_id, data: { ...record.data }, updatedAt: record.updated_at };
 }
 
 function mapTableCharacterMembership(record: TableCharacterMembershipRecord): TableCharacterMembership {
@@ -512,9 +605,11 @@ export interface ProductFoundation {
   tables: CampaignTable[];
   campaignMemberships: CampaignMembership[];
   tableMemberships: TableMembership[];
+  identities: CharacterIdentity[];
   campaignCharacters: CampaignCharacterMembership[];
   tableCharacters: TableCharacterMembership[];
   characters: CharacterRuntime[];
+  changeRequests: CharacterChangeRequest[];
 }
 
 export class SurrealStore {
@@ -627,15 +722,39 @@ export class SurrealStore {
     });
 
     await this.ensureStarterCharacterFromLegacySnapshot(sessionId);
-    const characters = await this.listCharacterRuntimes();
-    for (const character of characters) {
-      const campaignMembershipId = `${STARTER_CAMPAIGN_ID}--${character.definition.id}`;
-      const tableMembershipId = `${STARTER_TABLE_ID}--${character.definition.id}`;
-      await this.db.upsert<CampaignCharacterMembershipRecord>(new RecordId("campaign_character_membership", campaignMembershipId)).content({
-        membership_id: campaignMembershipId, campaign_id: STARTER_CAMPAIGN_ID, character_id: character.definition.id
+    const legacyCharacters = await this.listCharacterRuntimes();
+    const existingMemberships = await this.db.select<CampaignCharacterMembershipRecord>(new Table("campaign_character_membership"));
+    const enrolledCharacterIds = new Set(existingMemberships.map((membership) => membership.character_id));
+    for (const character of legacyCharacters) {
+      if (enrolledCharacterIds.has(character.definition.id)) continue;
+      const identityId = character.definition.id === STARTER_CHARACTER_ID ? STARTER_CHARACTER_IDENTITY_ID : `${character.definition.id}-identity`;
+      await this.db.upsert<CharacterIdentityRecord>(new RecordId("character_identity", identityId)).content({
+        identity_id: identityId, owner_key: PREVIEW_MEMBER_KEY, display_name: character.definition.name,
+        ruleset_id: character.definition.rulesetId, created_at: character.definition.createdAt, updated_at: now
       });
+      const campaignMembershipId = `${STARTER_CAMPAIGN_ID}--${character.definition.id}`;
+      await this.db.upsert<CampaignCharacterMembershipRecord>(new RecordId("campaign_character_membership", campaignMembershipId)).content({
+        membership_id: campaignMembershipId, campaign_id: STARTER_CAMPAIGN_ID, character_id: character.definition.id, identity_id: identityId,
+        source_kind: "legacy_migration", created_at: character.definition.createdAt
+      });
+      const tableMembershipId = `${STARTER_TABLE_ID}--${character.definition.id}`;
       await this.db.upsert<TableCharacterMembershipRecord>(new RecordId("table_character_membership", tableMembershipId)).content({
         membership_id: tableMembershipId, table_id: STARTER_TABLE_ID, character_id: character.definition.id
+      });
+    }
+
+    const memberships = await this.db.select<CampaignCharacterMembershipRecord>(new Table("campaign_character_membership"));
+    for (const membership of memberships) {
+      if (membership.identity_id && membership.source_kind && membership.created_at) continue;
+      const character = await this.getCharacterRuntime(membership.character_id);
+      if (!character) continue;
+      const identityId = character.definition.id === STARTER_CHARACTER_ID ? STARTER_CHARACTER_IDENTITY_ID : `${character.definition.id}-identity`;
+      await this.db.upsert<CharacterIdentityRecord>(new RecordId("character_identity", identityId)).content({
+        identity_id: identityId, owner_key: PREVIEW_MEMBER_KEY, display_name: character.definition.name,
+        ruleset_id: character.definition.rulesetId, created_at: character.definition.createdAt, updated_at: now
+      });
+      await this.db.update<CampaignCharacterMembershipRecord>(new RecordId("campaign_character_membership", membership.membership_id)).merge({
+        identity_id: identityId, source_kind: "legacy_migration", created_at: character.definition.createdAt
       });
     }
   }
@@ -643,20 +762,19 @@ export class SurrealStore {
   async loadProductFoundation(sessionId: string): Promise<ProductFoundation> {
     await this.connect();
     await this.ensureStarterProductFoundationInternal(sessionId);
-    const [campaigns, tables, campaignMemberships, tableMemberships, campaignCharacters, tableCharacters, characters] = await Promise.all([
-      this.db.select<CampaignRecord>(new Table("campaign")),
-      this.db.select<CampaignTableRecord>(new Table("campaign_table")),
-      this.db.select<CampaignMembershipRecord>(new Table("campaign_membership")),
-      this.db.select<TableMembershipRecord>(new Table("table_membership")),
-      this.db.select<CampaignCharacterMembershipRecord>(new Table("campaign_character_membership")),
-      this.db.select<TableCharacterMembershipRecord>(new Table("table_character_membership")),
-      this.listCharacterRuntimes()
+    const [campaigns, tables, campaignMemberships, tableMemberships, identities, campaignCharacters, tableCharacters, characters, changeRequests] = await Promise.all([
+      this.db.select<CampaignRecord>(new Table("campaign")), this.db.select<CampaignTableRecord>(new Table("campaign_table")),
+      this.db.select<CampaignMembershipRecord>(new Table("campaign_membership")), this.db.select<TableMembershipRecord>(new Table("table_membership")),
+      this.db.select<CharacterIdentityRecord>(new Table("character_identity")), this.db.select<CampaignCharacterMembershipRecord>(new Table("campaign_character_membership")),
+      this.db.select<TableCharacterMembershipRecord>(new Table("table_character_membership")), this.listCharacterRuntimes(),
+      this.db.select<CharacterChangeRequestRecord>(new Table("character_change_request"))
     ]);
     return {
       campaigns: campaigns.map(mapCampaign), tables: tables.map(mapCampaignTable),
       campaignMemberships: campaignMemberships.map(mapCampaignMembership), tableMemberships: tableMemberships.map(mapTableMembership),
-      campaignCharacters: campaignCharacters.map(mapCampaignCharacterMembership), tableCharacters: tableCharacters.map(mapTableCharacterMembership),
-      characters
+      identities: identities.map(mapCharacterIdentity), campaignCharacters: campaignCharacters.map(mapCampaignCharacterMembership),
+      tableCharacters: tableCharacters.map(mapTableCharacterMembership), characters,
+      changeRequests: changeRequests.map(mapCharacterChangeRequest).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     };
   }
 
@@ -716,23 +834,10 @@ export class SurrealStore {
     }
   }
 
-  async createCharacter(input: { name: unknown; rulesetId: unknown; maxHp: unknown; rulesetData?: unknown }): Promise<CharacterRuntime> {
-    await this.connect();
-    const txn = await this.db.beginTransaction();
-    try {
-      const runtime = await this.createCharacterInTransaction(txn, { id: randomUUID(), ...input });
-      await txn.commit();
-      return runtime;
-    } catch (error) {
-      await txn.cancel();
-      throw error;
-    }
-  }
-
-  async updateCharacter(input: { characterId: string; name: unknown; maxHp: unknown; rulesetData: unknown }): Promise<CharacterRuntime> {
-    await this.connect();
-    const existing = await this.getCharacterRuntime(input.characterId);
-    if (!existing) throw new Error("character not found");
+  private async updateCharacterInTransaction(
+    txn: SurrealTransaction, existing: CharacterRuntime,
+    input: { characterId: string; name: unknown; maxHp: unknown; rulesetData: unknown }
+  ): Promise<CharacterRuntime> {
     const hpResource = existing.resources.find((resource) => resource.key === "hp");
     if (!hpResource) throw new Error("character has no hp resource");
     const name = normalizeCharacterName(input.name);
@@ -740,23 +845,25 @@ export class SurrealStore {
     const hp = normalizeResourceBounds(Math.min(hpResource.current, maxHp), maxHp);
     const rulesetData = normalizeRulesetData(input.rulesetData);
     const now = new Date().toISOString();
+    const characterRecord = await txn.update<CharacterRecord>(new RecordId("character", input.characterId)).merge({
+      name, ruleset_data: rulesetData, updated_at: now
+    });
+    const resourceRecord = await txn.update<CharacterResourceRecord>(new RecordId("character_resource", hpResource.id)).merge({
+      current: hp.current, max: hp.max, updated_at: now
+    });
+    return { definition: mapCharacter(characterRecord), resources: existing.resources.map((resource) => resource.key === "hp" ? mapCharacterResource(resourceRecord) : resource) };
+  }
+
+  private async updateCharacter(input: { characterId: string; name: unknown; maxHp: unknown; rulesetData: unknown }): Promise<CharacterRuntime> {
+    await this.connect();
+    const existing = await this.getCharacterRuntime(input.characterId);
+    if (!existing) throw new Error("character not found");
     const txn = await this.db.beginTransaction();
     try {
-      const characterRecord = await txn.update<CharacterRecord>(new RecordId("character", input.characterId)).merge({
-        name, ruleset_data: rulesetData, updated_at: now
-      });
-      const resourceRecord = await txn.update<CharacterResourceRecord>(new RecordId("character_resource", hpResource.id)).merge({
-        current: hp.current, max: hp.max, updated_at: now
-      });
+      const runtime = await this.updateCharacterInTransaction(txn, existing, input);
       await txn.commit();
-      return {
-        definition: mapCharacter(characterRecord),
-        resources: existing.resources.map((resource) => resource.key === "hp" ? mapCharacterResource(resourceRecord) : resource)
-      };
-    } catch (error) {
-      await txn.cancel();
-      throw error;
-    }
+      return runtime;
+    } catch (error) { await txn.cancel(); throw error; }
   }
 
   async listCharacterResources(characterId: string): Promise<CharacterResource[]> {
@@ -790,6 +897,174 @@ export class SurrealStore {
     return characters.map(mapCharacter).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((definition) => ({
       definition, resources: (byCharacter.get(definition.id) ?? []).sort((a, b) => a.key.localeCompare(b.key))
     }));
+  }
+
+  async listTableCharacterRuntimes(tableId: string): Promise<CharacterRuntime[]> {
+    await this.connect();
+    const [memberships] = await this.db.query<[TableCharacterMembershipRecord[]]>(
+      "SELECT * FROM table_character_membership WHERE table_id = $tableId", { tableId }
+    );
+    const allowed = new Set((memberships ?? []).map((item) => item.character_id));
+    return (await this.listCharacterRuntimes()).filter((runtime) => allowed.has(runtime.definition.id));
+  }
+
+  async getCharacterIdentity(identityId: string): Promise<CharacterIdentity | null> {
+    await this.connect();
+    const record = await this.db.select<CharacterIdentityRecord>(new RecordId("character_identity", identityId));
+    return record ? mapCharacterIdentity(record) : null;
+  }
+
+  async createCharacterIdentity(input: { ownerKey: string; displayName: unknown; rulesetId: unknown }): Promise<CharacterIdentity> {
+    await this.connect();
+    const displayName = normalizeCharacterName(input.displayName);
+    const rulesetId = normalizeRulesetId(input.rulesetId);
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const record = await this.db.create<CharacterIdentityRecord>(new RecordId("character_identity", id)).content({
+      identity_id: id, owner_key: input.ownerKey, display_name: displayName, ruleset_id: rulesetId, created_at: now, updated_at: now
+    });
+    return mapCharacterIdentity(record);
+  }
+
+  async getCampaignCharacterMembership(characterId: string): Promise<CampaignCharacterMembership | null> {
+    await this.connect();
+    const [records] = await this.db.query<[CampaignCharacterMembershipRecord[]]>(
+      "SELECT * FROM campaign_character_membership WHERE character_id = $characterId LIMIT 1", { characterId }
+    );
+    return records?.[0] ? mapCampaignCharacterMembership(records[0]) : null;
+  }
+
+  async createCampaignCharacter(input: {
+    identityId: string; campaignId: string; name: unknown; rulesetId: unknown; maxHp: unknown; rulesetData: unknown;
+    sourceKind: CampaignCharacterMembership["sourceKind"]; sourceCharacterId?: string | null;
+  }): Promise<CharacterRuntime> {
+    await this.connect();
+    const identity = await this.getCharacterIdentity(input.identityId);
+    if (!identity) throw new Error("character identity not found");
+    const campaign = await this.db.select<CampaignRecord>(new RecordId("campaign", input.campaignId));
+    if (!campaign) throw new Error("campaign not found");
+    const [existing] = await this.db.query<[CampaignCharacterMembershipRecord[]]>(
+      "SELECT * FROM campaign_character_membership WHERE campaign_id = $campaignId AND identity_id = $identityId LIMIT 1",
+      { campaignId: input.campaignId, identityId: input.identityId }
+    );
+    if (existing?.length) throw new Error("character identity already has a version in this campaign");
+    if (input.sourceKind === "current_build") {
+      if (!input.sourceCharacterId) throw new Error("current build source character is required");
+      const source = await this.getCampaignCharacterMembership(input.sourceCharacterId);
+      if (!source || source.identityId !== input.identityId) throw new Error("source character does not belong to this identity");
+    }
+    const characterId = randomUUID();
+    const now = new Date().toISOString();
+    const txn = await this.db.beginTransaction();
+    try {
+      const runtime = await this.createCharacterInTransaction(txn, { id: characterId, name: input.name, rulesetId: input.rulesetId, maxHp: input.maxHp, rulesetData: input.rulesetData });
+      const membershipId = `${input.campaignId}--${characterId}`;
+      await txn.create<CampaignCharacterMembershipRecord>(new RecordId("campaign_character_membership", membershipId)).content({
+        membership_id: membershipId, campaign_id: input.campaignId, character_id: characterId, identity_id: input.identityId,
+        source_kind: input.sourceKind, source_character_id: input.sourceCharacterId ?? undefined, created_at: now
+      });
+      await txn.commit();
+      return runtime;
+    } catch (error) { await txn.cancel(); throw error; }
+  }
+
+  async addCampaignCharacterToTable(characterId: string, tableId: string): Promise<TableCharacterMembership> {
+    await this.connect();
+    const campaignCharacter = await this.getCampaignCharacterMembership(characterId);
+    if (!campaignCharacter) throw new Error("campaign character not found");
+    const table = await this.db.select<CampaignTableRecord>(new RecordId("campaign_table", tableId));
+    if (!table) throw new Error("table not found");
+    if (table.campaign_id !== campaignCharacter.campaignId) throw new Error("table and character belong to different campaigns");
+    const membershipId = `${tableId}--${characterId}`;
+    const record = await this.db.upsert<TableCharacterMembershipRecord>(new RecordId("table_character_membership", membershipId)).content({
+      membership_id: membershipId, table_id: tableId, character_id: characterId
+    });
+    return mapTableCharacterMembership(record);
+  }
+
+  async createCharacterChangeRequest(input: {
+    campaignId: string; characterId: string; requestedBy: string; name: unknown; maxHp: unknown; rulesetData: unknown; message?: unknown;
+  }): Promise<CharacterChangeRequest> {
+    await this.connect();
+    const membership = await this.getCampaignCharacterMembership(input.characterId);
+    if (!membership || membership.campaignId !== input.campaignId) throw new Error("campaign character not found");
+    const runtime = await this.getCharacterRuntime(input.characterId);
+    if (!runtime) throw new Error("campaign character not found");
+    const [pending] = await this.db.query<[CharacterChangeRequestRecord[]]>(
+      "SELECT * FROM character_change_request WHERE character_id = $characterId AND status = 'pending' LIMIT 1",
+      { characterId: input.characterId }
+    );
+    if (pending?.length) throw new Error("character already has a pending change request");
+    const name = normalizeCharacterName(input.name);
+    const maxHp = Number(input.maxHp);
+    normalizeResourceBounds(maxHp, maxHp);
+    const rulesetData = normalizeRulesetData(input.rulesetData);
+    const message = normalizeChangeMessage(input.message);
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const record = await this.db.create<CharacterChangeRequestRecord>(new RecordId("character_change_request", id)).content({
+      request_id: id, campaign_id: input.campaignId, character_id: input.characterId, requested_by: input.requestedBy, status: "pending",
+      proposed_name: name, proposed_max_hp: maxHp, proposed_ruleset_data: rulesetData, message,
+      base_updated_at: runtime.definition.updatedAt, created_at: now
+    });
+    return mapCharacterChangeRequest(record);
+  }
+
+  async resolveCharacterChangeRequest(input: { requestId: string; decision: "approve" | "reject"; resolvedBy: string }): Promise<CharacterChangeRequest> {
+    await this.connect();
+    const request = await this.db.select<CharacterChangeRequestRecord>(new RecordId("character_change_request", input.requestId));
+    if (!request) throw new Error("change request not found");
+    if (request.status !== "pending") throw new Error("change request is already resolved");
+    const existing = await this.getCharacterRuntime(request.character_id);
+    if (!existing) throw new Error("character not found");
+    if (input.decision === "approve" && existing.definition.updatedAt !== request.base_updated_at) {
+      throw new Error("change request is stale because the character changed after it was submitted");
+    }
+    const now = new Date().toISOString();
+    const txn = await this.db.beginTransaction();
+    try {
+      if (input.decision === "approve") {
+        await this.updateCharacterInTransaction(txn, existing, {
+          characterId: request.character_id, name: request.proposed_name, maxHp: request.proposed_max_hp, rulesetData: request.proposed_ruleset_data
+        });
+      }
+      const resolved = await txn.update<CharacterChangeRequestRecord>(new RecordId("character_change_request", input.requestId)).merge({
+        status: input.decision === "approve" ? "approved" : "rejected", resolved_at: now, resolved_by: input.resolvedBy
+      });
+      await txn.commit();
+      return mapCharacterChangeRequest(resolved);
+    } catch (error) { await txn.cancel(); throw error; }
+  }
+
+  async updateCampaignCharacterDirect(input: { characterId: string; campaignId: string; name: unknown; maxHp: unknown; rulesetData: unknown }): Promise<CharacterRuntime> {
+    const membership = await this.getCampaignCharacterMembership(input.characterId);
+    if (!membership || membership.campaignId !== input.campaignId) throw new Error("campaign character not found");
+    return this.updateCharacter(input);
+  }
+
+  async getCampaignCharacterPrivateState(characterId: string, campaignId: string): Promise<CampaignCharacterPrivateState> {
+    await this.connect();
+    const membership = await this.getCampaignCharacterMembership(characterId);
+    if (!membership || membership.campaignId !== campaignId) throw new Error("campaign character not found");
+    const [records] = await this.db.query<[CampaignCharacterPrivateStateRecord[]]>(
+      "SELECT * FROM campaign_character_private_state WHERE campaign_id = $campaignId AND character_id = $characterId LIMIT 1",
+      { campaignId, characterId }
+    );
+    const record = records?.[0];
+    return record ? mapCampaignCharacterPrivateState(record) : { campaignId, characterId, data: {}, updatedAt: "" };
+  }
+
+  async setCampaignCharacterPrivateState(characterId: string, campaignId: string, dataInput: unknown): Promise<CampaignCharacterPrivateState> {
+    await this.connect();
+    const membership = await this.getCampaignCharacterMembership(characterId);
+    if (!membership || membership.campaignId !== campaignId) throw new Error("campaign character not found");
+    const data = normalizePrivateCharacterState(dataInput);
+    const now = new Date().toISOString();
+    const stateId = `${campaignId}--${characterId}`;
+    const record = await this.db.upsert<CampaignCharacterPrivateStateRecord>(new RecordId("campaign_character_private_state", stateId)).content({
+      state_id: stateId, campaign_id: campaignId, character_id: characterId, data, updated_at: now
+    });
+    return mapCampaignCharacterPrivateState(record);
   }
 
   async getCharacterResource(characterId: string, keyInput: unknown): Promise<CharacterResource | null> {

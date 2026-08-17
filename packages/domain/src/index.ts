@@ -1,5 +1,6 @@
 export * from "./campaign.js";
 export * from "./character.js";
+export * from "./character-lifecycle.js";
 export * from "./dice.js";
 export * from "./health.js";
 export * from "./session.js";

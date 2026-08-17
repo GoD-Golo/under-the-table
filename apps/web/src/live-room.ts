@@ -185,16 +185,6 @@ export function useLiveRoom() {
     roomRef.current?.send(MESSAGE.adjustHp, { characterId, delta });
   }, []);
 
-  const createCharacter = useCallback((command: { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.createCharacter, command);
-  }, []);
-
-  const updateCharacter = useCallback((command: { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.updateCharacter, command);
-  }, []);
-
   const createToken = useCallback((command: {
     sceneId: string; kind: "player" | "npc" | "object"; label: string; x: number; y: number; claim?: boolean;
   }) => {
@@ -244,8 +234,6 @@ export function useLiveRoom() {
     clientName,
     roll,
     adjustHp,
-    createCharacter,
-    updateCharacter,
     presentScene,
     createToken,
     moveToken,

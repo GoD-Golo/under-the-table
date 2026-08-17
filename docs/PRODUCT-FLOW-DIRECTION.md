@@ -1,6 +1,6 @@
 # Product flow direction
 
-Status: **accepted direction; VS007 product-flow foundation implemented**
+Status: **accepted direction; VS008 character lifecycle implemented**
 
 This document records the navigation and ownership model agreed after the first branded landing page. It is intentionally broader than the current implementation. Current runtime behavior remains documented in `ARCHITECTURE.md` and the vertical-slice documents.
 
@@ -89,19 +89,23 @@ CharacterIdentity
 - copy the current build;
 - later: copy a saved level/build snapshot.
 
+VS008 implements the first two. Copy-current-build clones structural ruleset data and maximum HP, not temporary current damage; the new campaign version starts at full copied maximum HP.
+
 After creation, CampaignCharacters evolve independently. A level-5 choice in Campaign A may differ from the same CharacterIdentity's level-5 choice in Campaign B. There is no automatic cross-campaign synchronization.
 
 `Add to Table` is reference/membership only. Every Table inside the same Campaign sees the same CampaignCharacter state: progression, inventory, spells, persistent resources, and campaign history.
 
-The durable character introduced in VS004–VS006 is conceptually closest to the future `CampaignCharacter`, not the global `CharacterIdentity`.
+The durable character introduced in VS004–VS006 is the canonical CampaignCharacter data in VS008; `CharacterIdentity` now sits above it and can own independent versions in multiple Campaigns.
 
 ## Character governance
 
 Once a character participates in a campaign, arbitrary progression/authoring edits should not silently overwrite campaign truth.
 
-Player-authored structural changes should support a future diff/approval flow:
+Player-authored structural changes use a diff/approval flow:
 
-`edit -> preview changes -> request DM approval -> approve / edit-and-approve / reject`.
+`edit -> preview changes -> request DM approval -> approve / reject`.
+
+VS008 permits one pending request per CampaignCharacter and records the character revision at submission. A later structural change makes the request stale and prevents approval from overwriting newer campaign truth. `edit-and-approve` remains a future refinement.
 
 Normal gameplay transitions such as damage, healing, resource use, and item consumption do not require a separate approval request when produced through the game/session rules.
 
@@ -151,7 +155,9 @@ Notifications may later cover new polls, uncast votes, selected dates, and pre-s
 
 Campaign/Table/membership boundaries, Home/Campaign/Table/Characters surfaces, socket-free product browsing, and contextual Play/Director navigation are implemented. The current preview maps one persistent starter Table to the existing single live Session; concurrent per-Table rooms remain future runtime work.
 
-**VS008 — Character Campaign Lifecycle** should implement campaign forking/import, progression change requests, and DM overrides/private state.
+**VS008 — Character Campaign Lifecycle — implemented**
+
+CharacterIdentity, independent campaign imports/forks, Table membership by reference, structural change requests with stale-write protection, direct DM overrides, an explicit DM-private data boundary, and Table-filtered live character projection are implemented. Auth is still deferred, so governance affordances are not yet security enforcement.
 
 **VS009 — Permissions & Co-DM Scopes** should deepen capability/scoped authorization semantics before auth/security enforcement is claimed.
 
