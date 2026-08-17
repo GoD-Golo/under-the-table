@@ -1,8 +1,7 @@
 import { BrandLogo } from "./BrandLogo.js";
 
 type LandingPageProps = {
-  onEnterPlay: () => void;
-  onEnterDirector: () => void;
+  onEnterProduct: () => void;
 };
 
 const schools = [
@@ -42,13 +41,13 @@ function DeviceStage() {
   );
 }
 
-export function LandingPage({ onEnterPlay, onEnterDirector }: LandingPageProps) {
+export function LandingPage({ onEnterProduct }: LandingPageProps) {
   return (
     <main className="marketing-shell">
       <nav className="marketing-nav">
         <a className="marketing-logo" href="#top" aria-label="Under The Table home"><BrandLogo /></a>
         <div className="marketing-links"><a href="#platform">Platform</a><a href="#spellcraft">Spellcraft</a><a href="#play">How it plays</a></div>
-        <button className="marketing-nav-cta" type="button" onClick={onEnterPlay}>Enter table <span>↗</span></button>
+        <button className="marketing-nav-cta" type="button" onClick={onEnterProduct}>Enter Under The Table <span>↗</span></button>
       </nav>
 
       <section className="marketing-hero" id="top">
@@ -57,8 +56,8 @@ export function LandingPage({ onEnterPlay, onEnterDirector }: LandingPageProps) 
           <h1>One table.<br /><em>Every screen.</em></h1>
           <p>Worldbuilding, live play and character tools that stay out of the way when the story starts moving.</p>
           <div className="hero-actions">
-            <button className="marketing-primary" type="button" onClick={onEnterPlay}>Join the table <span>→</span></button>
-            <button className="marketing-secondary" type="button" onClick={onEnterDirector}>Open Director</button>
+            <button className="marketing-primary" type="button" onClick={onEnterProduct}>Enter Under The Table <span>→</span></button>
+            <a className="marketing-secondary" href="#play">See how it plays</a>
           </div>
           <div className="hero-proof"><span className="proof-eye">◉</span><span><strong>One world, one flow.</strong> Prepare privately. Present deliberately. Play anywhere.</span></div>
         </div>
@@ -97,7 +96,7 @@ export function LandingPage({ onEnterPlay, onEnterDirector }: LandingPageProps) 
       <section className="marketing-cta">
         <BrandLogo compact />
         <div><span className="marketing-eyebrow">Ready when the table is.</span><h2>Your next session starts here.</h2></div>
-        <div className="hero-actions"><button className="marketing-primary" type="button" onClick={onEnterPlay}>Enter Play <span>→</span></button><button className="marketing-secondary" type="button" onClick={onEnterDirector}>Build a world</button></div>
+        <div className="hero-actions"><button className="marketing-primary" type="button" onClick={onEnterProduct}>Enter product <span>→</span></button><a className="marketing-secondary" href="#platform">Explore the platform</a></div>
       </section>
 
       <footer className="marketing-footer"><BrandLogo /><span>Under The Table · private homelab preview</span><span>One world · one flow</span></footer>

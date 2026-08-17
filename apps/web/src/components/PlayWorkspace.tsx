@@ -28,6 +28,7 @@ interface PlayWorkspaceProps {
   onMoveToken: (tokenId: string, x: number, y: number) => void;
   onReconnect: () => void;
   onImmersiveChange: (immersive: boolean) => void;
+  onExitTable: () => void;
 }
 
 function loadPlayMode(): PlayMode {
@@ -101,7 +102,7 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
   );
 }
 
-export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onCreateCharacter, onUpdateCharacter, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onImmersiveChange }: PlayWorkspaceProps) {
+export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onCreateCharacter, onUpdateCharacter, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onImmersiveChange, onExitTable }: PlayWorkspaceProps) {
   const [selectedCharacterId, setSelectedCharacterIdState] = useState<string | null>(() => window.localStorage.getItem("utt.play.character.v1"));
   const offline = useOfflineCompanion(campaignState, selectedCharacterId);
   const [mode, setModeState] = useState<PlayMode>(() => loadPlayMode());
@@ -154,15 +155,16 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
   };
   const leaveVirtualTable = async () => {
     if (document.fullscreenElement) await document.exitFullscreen();
-    setMode("companion");
+    onExitTable();
   };
 
   return (
     <main className={`play-workspace ${mode === "table" && campaignState ? "immersive-table" : ""}`}>
       {mode === "table" && campaignState ? <>
-        <button type="button" className="play-bubble play-back-bubble" onClick={() => void leaveVirtualTable()} aria-label="Back to Play" title="Back to Play">←</button>
+        <button type="button" className="play-bubble play-back-bubble" onClick={() => void leaveVirtualTable()} aria-label="Back to Table Home" title="Back to Table Home">←</button>
         <div className={`play-utility-bubble ${utilityTrayOpen ? "open" : ""}`}>
           {utilityTrayOpen ? <div className="play-bubble-tray" role="group" aria-label="Virtual Table tools">
+            <button type="button" onClick={() => setMode("companion")}>Companion</button>
             <button type="button" onClick={() => setCharacterLibraryOpen(true)}>Characters</button>
             <button type="button" onClick={() => setShowHud((value) => !value)} aria-pressed={!showHud}>{showHud ? "Hide HUD" : "Show HUD"}</button>
             <button type="button" disabled={!fullscreenSupported} onClick={() => void toggleFullscreen()} aria-pressed={fullscreenActive} title={fullscreenSupported ? "Toggle browser fullscreen" : "Fullscreen is not supported by this browser"}>{fullscreenActive ? "Exit fullscreen" : "Fullscreen"}</button>
@@ -176,6 +178,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
         </div>
         <div className="play-toolbar-status"><span className={`status-pip ${connectionStatus}`} /><span>{campaignState ? "Campaign connected" : "No live campaign"}</span></div>
         <div className="play-toolbar-actions">
+          <button type="button" className="ghost-button" onClick={onExitTable}>← Table Home</button>
           {campaignState ? <button type="button" className="ghost-button" onClick={() => setCharacterLibraryOpen(true)}>Characters</button> : null}
           {mode === "table" ? <><button type="button" className="ghost-button" onClick={() => setShowHud((value) => !value)}>{showHud ? "Hide HUD" : "Show HUD"}</button>{showHud ? <button type="button" className="ghost-button" onClick={() => setResetToken((value) => value + 1)}>Reset HUD</button> : null}</> : <>
             <div className="companion-source-switch" role="group" aria-label="Companion data source">

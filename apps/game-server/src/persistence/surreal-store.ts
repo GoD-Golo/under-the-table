@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { RecordId, Surreal, Table } from "surrealdb";
 import {
   DEFAULT_RULESET_ID,
+  PREVIEW_MEMBER_KEY,
+  STARTER_CAMPAIGN_ID,
+  STARTER_TABLE_ID,
   STARTER_CHARACTER_ID,
   STARTER_SCENE_ID,
   normalizeCharacterName,
@@ -18,6 +21,12 @@ import {
   normalizeTokenCoordinate,
   normalizeTokenKind,
   normalizeTokenLabel,
+  type Campaign,
+  type CampaignCharacterMembership,
+  type CampaignMembership,
+  type CampaignTable,
+  type TableCharacterMembership,
+  type TableMembership,
   type CharacterDefinition,
   type CharacterResource,
   type CharacterRuntime,
@@ -123,6 +132,61 @@ interface TokenRecord {
   updated_at: string;
 }
 
+interface CampaignRecord {
+  [key: string]: unknown;
+  campaign_id: string;
+  name: string;
+  summary: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CampaignTableRecord {
+  [key: string]: unknown;
+  table_id: string;
+  campaign_id: string;
+  name: string;
+  summary: string;
+  current_session_id?: string | undefined;
+  created_at: string;
+  updated_at: string;
+}
+
+interface CampaignMembershipRecord {
+  [key: string]: unknown;
+  membership_id: string;
+  campaign_id: string;
+  member_key: string;
+  display_name: string;
+  role_labels: CampaignMembership["roleLabels"];
+  capabilities: string[];
+  scopes_json: string;
+}
+
+interface TableMembershipRecord {
+  [key: string]: unknown;
+  membership_id: string;
+  table_id: string;
+  member_key: string;
+  display_name: string;
+  role_labels: TableMembership["roleLabels"];
+  capabilities: string[];
+}
+
+interface CampaignCharacterMembershipRecord {
+  [key: string]: unknown;
+  membership_id: string;
+  campaign_id: string;
+  character_id: string;
+}
+
+interface TableCharacterMembershipRecord {
+  [key: string]: unknown;
+  membership_id: string;
+  table_id: string;
+  character_id: string;
+}
+
 type SurrealTransaction = Awaited<ReturnType<Surreal["beginTransaction"]>>;
 
 const schema = `
@@ -144,6 +208,54 @@ DEFINE FIELD IF NOT EXISTS state ON TABLE session_snapshot TYPE object FLEXIBLE;
 DEFINE FIELD IF NOT EXISTS updated_at ON TABLE session_snapshot TYPE string;
 DEFINE INDEX IF NOT EXISTS session_snapshot_session ON TABLE session_snapshot FIELDS session_id UNIQUE;
 
+
+DEFINE TABLE IF NOT EXISTS campaign SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE campaign TYPE string;
+DEFINE FIELD IF NOT EXISTS name ON TABLE campaign TYPE string;
+DEFINE FIELD IF NOT EXISTS summary ON TABLE campaign TYPE string;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE campaign TYPE string;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE campaign TYPE string;
+
+DEFINE TABLE IF NOT EXISTS campaign_table SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS table_id ON TABLE campaign_table TYPE string;
+DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE campaign_table TYPE string;
+DEFINE FIELD IF NOT EXISTS name ON TABLE campaign_table TYPE string;
+DEFINE FIELD IF NOT EXISTS summary ON TABLE campaign_table TYPE string;
+DEFINE FIELD IF NOT EXISTS current_session_id ON TABLE campaign_table TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS created_at ON TABLE campaign_table TYPE string;
+DEFINE FIELD IF NOT EXISTS updated_at ON TABLE campaign_table TYPE string;
+DEFINE INDEX IF NOT EXISTS campaign_table_campaign ON TABLE campaign_table FIELDS campaign_id;
+
+DEFINE TABLE IF NOT EXISTS campaign_membership SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS membership_id ON TABLE campaign_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE campaign_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS member_key ON TABLE campaign_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS display_name ON TABLE campaign_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS role_labels ON TABLE campaign_membership TYPE array<string>;
+DEFINE FIELD IF NOT EXISTS capabilities ON TABLE campaign_membership TYPE array<string>;
+DEFINE FIELD IF NOT EXISTS scopes_json ON TABLE campaign_membership TYPE string;
+DEFINE INDEX IF NOT EXISTS campaign_membership_member ON TABLE campaign_membership FIELDS campaign_id, member_key UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS table_membership SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS membership_id ON TABLE table_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS table_id ON TABLE table_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS member_key ON TABLE table_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS display_name ON TABLE table_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS role_labels ON TABLE table_membership TYPE array<string>;
+DEFINE FIELD IF NOT EXISTS capabilities ON TABLE table_membership TYPE array<string>;
+DEFINE INDEX IF NOT EXISTS table_membership_member ON TABLE table_membership FIELDS table_id, member_key UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS campaign_character_membership SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS membership_id ON TABLE campaign_character_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS campaign_id ON TABLE campaign_character_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS character_id ON TABLE campaign_character_membership TYPE string;
+DEFINE INDEX IF NOT EXISTS campaign_character_unique ON TABLE campaign_character_membership FIELDS campaign_id, character_id UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS table_character_membership SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS membership_id ON TABLE table_character_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS table_id ON TABLE table_character_membership TYPE string;
+DEFINE FIELD IF NOT EXISTS character_id ON TABLE table_character_membership TYPE string;
+DEFINE INDEX IF NOT EXISTS table_character_unique ON TABLE table_character_membership FIELDS table_id, character_id UNIQUE;
 
 DEFINE TABLE IF NOT EXISTS character SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS character_id ON TABLE character TYPE string;
@@ -263,6 +375,50 @@ function mapCharacterResource(record: CharacterResourceRecord): CharacterResourc
   };
 }
 
+function mapCampaign(record: CampaignRecord): Campaign {
+  return { id: record.campaign_id, name: record.name, summary: record.summary, createdAt: record.created_at, updatedAt: record.updated_at };
+}
+
+function mapCampaignTable(record: CampaignTableRecord): CampaignTable {
+  return {
+    id: record.table_id, campaignId: record.campaign_id, name: record.name, summary: record.summary,
+    currentSessionId: record.current_session_id ?? null, createdAt: record.created_at, updatedAt: record.updated_at
+  };
+}
+
+function parseMembershipScopes(value: string): CampaignMembership["scopes"] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((scope) => {
+      if (typeof scope !== "object" || scope === null) return [];
+      const item = scope as Record<string, unknown>;
+      if (item.kind !== "campaign" && item.kind !== "world_subgraph") return [];
+      return [{
+        kind: item.kind,
+        worldEntityId: typeof item.worldEntityId === "string" ? item.worldEntityId : null,
+        includeDescendants: item.includeDescendants === true
+      }];
+    });
+  } catch { return []; }
+}
+
+function mapCampaignMembership(record: CampaignMembershipRecord): CampaignMembership {
+  return { id: record.membership_id, campaignId: record.campaign_id, memberKey: record.member_key, displayName: record.display_name, roleLabels: [...record.role_labels], capabilities: [...record.capabilities], scopes: parseMembershipScopes(record.scopes_json) };
+}
+
+function mapTableMembership(record: TableMembershipRecord): TableMembership {
+  return { id: record.membership_id, tableId: record.table_id, memberKey: record.member_key, displayName: record.display_name, roleLabels: [...record.role_labels], capabilities: [...record.capabilities] };
+}
+
+function mapCampaignCharacterMembership(record: CampaignCharacterMembershipRecord): CampaignCharacterMembership {
+  return { campaignId: record.campaign_id, characterId: record.character_id };
+}
+
+function mapTableCharacterMembership(record: TableCharacterMembershipRecord): TableCharacterMembership {
+  return { tableId: record.table_id, characterId: record.character_id };
+}
+
 function mapScene(record: SceneRecord): Scene {
   return {
     id: record.scene_id,
@@ -351,6 +507,16 @@ export interface CreateHotspotInput {
   createLinkedScene?: { name?: unknown; kind?: unknown } | null;
 }
 
+export interface ProductFoundation {
+  campaigns: Campaign[];
+  tables: CampaignTable[];
+  campaignMemberships: CampaignMembership[];
+  tableMemberships: TableMembership[];
+  campaignCharacters: CampaignCharacterMembership[];
+  tableCharacters: TableCharacterMembership[];
+  characters: CharacterRuntime[];
+}
+
 export class SurrealStore {
   private readonly db = new Surreal();
   private connection: Promise<void> | undefined;
@@ -423,6 +589,75 @@ export class SurrealStore {
   async ensureStarterScene(): Promise<Scene> {
     await this.connect();
     return this.ensureStarterSceneInternal();
+  }
+
+  private async ensureStarterProductFoundationInternal(sessionId: string): Promise<void> {
+    const now = new Date().toISOString();
+    const existingCampaign = await this.db.select<CampaignRecord>(new RecordId("campaign", STARTER_CAMPAIGN_ID));
+    if (!existingCampaign) {
+      await this.db.create<CampaignRecord>(new RecordId("campaign", STARTER_CAMPAIGN_ID)).content({
+        campaign_id: STARTER_CAMPAIGN_ID,
+        name: "The First Table",
+        summary: "The shared campaign world behind the current Under The Table preview.",
+        created_at: now, updated_at: now
+      });
+    }
+
+    const existingTable = await this.db.select<CampaignTableRecord>(new RecordId("campaign_table", STARTER_TABLE_ID));
+    if (!existingTable) {
+      await this.db.create<CampaignTableRecord>(new RecordId("campaign_table", STARTER_TABLE_ID)).content({
+        table_id: STARTER_TABLE_ID, campaign_id: STARTER_CAMPAIGN_ID, name: "Main Table",
+        summary: "The original live table, preserved as the first persistent Table context.",
+        current_session_id: sessionId, created_at: now, updated_at: now
+      });
+    } else if (existingTable.current_session_id !== sessionId) {
+      await this.db.update<CampaignTableRecord>(new RecordId("campaign_table", STARTER_TABLE_ID)).merge({ current_session_id: sessionId, updated_at: now });
+    }
+
+    await this.db.upsert<CampaignMembershipRecord>(new RecordId("campaign_membership", "preview-campaign-membership")).content({
+      membership_id: "preview-campaign-membership", campaign_id: STARTER_CAMPAIGN_ID, member_key: PREVIEW_MEMBER_KEY,
+      display_name: "Local Preview", role_labels: ["owner", "player"],
+      capabilities: ["campaign.manage", "world.edit", "scene.edit", "session.run", "table.manage", "character.manage"],
+      scopes_json: JSON.stringify([{ kind: "campaign", worldEntityId: null, includeDescendants: true }])
+    });
+    await this.db.upsert<TableMembershipRecord>(new RecordId("table_membership", "preview-table-membership")).content({
+      membership_id: "preview-table-membership", table_id: STARTER_TABLE_ID, member_key: PREVIEW_MEMBER_KEY,
+      display_name: "Local Preview", role_labels: ["dm", "player"],
+      capabilities: ["session.run", "table.prepare", "character.play"]
+    });
+
+    await this.ensureStarterCharacterFromLegacySnapshot(sessionId);
+    const characters = await this.listCharacterRuntimes();
+    for (const character of characters) {
+      const campaignMembershipId = `${STARTER_CAMPAIGN_ID}--${character.definition.id}`;
+      const tableMembershipId = `${STARTER_TABLE_ID}--${character.definition.id}`;
+      await this.db.upsert<CampaignCharacterMembershipRecord>(new RecordId("campaign_character_membership", campaignMembershipId)).content({
+        membership_id: campaignMembershipId, campaign_id: STARTER_CAMPAIGN_ID, character_id: character.definition.id
+      });
+      await this.db.upsert<TableCharacterMembershipRecord>(new RecordId("table_character_membership", tableMembershipId)).content({
+        membership_id: tableMembershipId, table_id: STARTER_TABLE_ID, character_id: character.definition.id
+      });
+    }
+  }
+
+  async loadProductFoundation(sessionId: string): Promise<ProductFoundation> {
+    await this.connect();
+    await this.ensureStarterProductFoundationInternal(sessionId);
+    const [campaigns, tables, campaignMemberships, tableMemberships, campaignCharacters, tableCharacters, characters] = await Promise.all([
+      this.db.select<CampaignRecord>(new Table("campaign")),
+      this.db.select<CampaignTableRecord>(new Table("campaign_table")),
+      this.db.select<CampaignMembershipRecord>(new Table("campaign_membership")),
+      this.db.select<TableMembershipRecord>(new Table("table_membership")),
+      this.db.select<CampaignCharacterMembershipRecord>(new Table("campaign_character_membership")),
+      this.db.select<TableCharacterMembershipRecord>(new Table("table_character_membership")),
+      this.listCharacterRuntimes()
+    ]);
+    return {
+      campaigns: campaigns.map(mapCampaign), tables: tables.map(mapCampaignTable),
+      campaignMemberships: campaignMemberships.map(mapCampaignMembership), tableMemberships: tableMemberships.map(mapTableMembership),
+      campaignCharacters: campaignCharacters.map(mapCampaignCharacterMembership), tableCharacters: tableCharacters.map(mapTableCharacterMembership),
+      characters
+    };
   }
 
   private async createCharacterInTransaction(
