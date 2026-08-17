@@ -8,6 +8,22 @@ async function readProduct(): Promise<ProductSnapshotDto> {
   return body;
 }
 
+export async function mutateProduct<T>(path: string, method: "POST" | "PATCH" | "PUT", body?: unknown): Promise<T> {
+  const init: RequestInit = { method, headers: { "Content-Type": "application/json" } };
+  if (body !== undefined) init.body = JSON.stringify(body);
+  const response = await fetch(`/game/api/product${path}`, init);
+  const payload = await response.json() as T & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? `Product mutation failed (${response.status})`);
+  return payload;
+}
+
+export async function readProductPrivateState<T>(characterId: string): Promise<T> {
+  const response = await fetch(`/game/api/product/campaign-characters/${encodeURIComponent(characterId)}/private`, { cache: "no-store" });
+  const payload = await response.json() as T & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? `Private state request failed (${response.status})`);
+  return payload;
+}
+
 export function useProductSnapshot() {
   const [data, setData] = useState<ProductSnapshotDto | null>(null);
   const [error, setError] = useState<string | null>(null);

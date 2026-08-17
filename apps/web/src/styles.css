@@ -913,3 +913,70 @@ button { color: inherit; }
   .play-choice { min-height: 84px; grid-template-columns: 42px 1fr 18px; padding: 14px; }
   .product-section { margin-bottom: 52px; }
 }
+
+/* VS008 Character campaign lifecycle */
+.character-lifecycle-heading { align-items: center; }
+.character-lifecycle-heading .product-primary { flex: 0 0 auto; }
+.character-identity-create { display: grid; grid-template-columns: 1fr minmax(220px,.7fr) auto; align-items: end; gap: 22px; margin: -12px 0 34px; padding: 22px 24px; border: 1px solid rgba(184,154,90,.16); border-radius: 8px; background: linear-gradient(110deg,rgba(184,154,90,.06),#0c0d10 52%); }
+.character-identity-create h2 { margin: 5px 0; font: 400 22px Iowan Old Style,Georgia,serif; }
+.character-identity-create p { margin: 0; color: rgba(242,237,228,.34); font-size: 9px; }
+.character-identity-create label, .character-private-sheet label { display: grid; gap: 7px; color: rgba(242,237,228,.42); font-size: 8px; }
+.character-identity-create input, .character-private-sheet textarea, .identity-import-actions select { border: 1px solid rgba(242,237,228,.10); border-radius: 5px; background: #090a0d; color: #f2ede4; outline: none; }
+.character-identity-create input { min-height: 42px; padding: 0 12px; }
+.character-identity-create input:focus, .character-private-sheet textarea:focus, .identity-import-actions select:focus { border-color: rgba(184,154,90,.45); }
+.identity-create-actions { display: flex; gap: 7px; }
+.product-feedback { margin: 0 0 22px; padding: 10px 13px; border-radius: 5px; font-size: 9px; }
+.product-feedback.error { border: 1px solid rgba(217,97,97,.24); background: rgba(217,97,97,.075); color: #e7aaaa; }
+.product-feedback.success { border: 1px solid rgba(117,201,143,.20); background: rgba(117,201,143,.055); color: #9fd6af; }
+.character-identities-grid { display: grid; gap: 18px; }
+.character-identity-card { padding: 28px; border: 1px solid rgba(242,237,228,.07); border-radius: 9px; background: linear-gradient(155deg,#101115,#0b0c0f 70%); }
+.identity-card-head { display: flex; align-items: center; gap: 17px; padding-bottom: 22px; border-bottom: 1px solid rgba(242,237,228,.055); }
+.identity-card-head h2 { margin: 3px 0; font: 400 28px Iowan Old Style,Georgia,serif; }
+.identity-card-head small { color: rgba(242,237,228,.28); font-size: 8px; }
+.identity-add-campaign { display: grid; grid-template-columns: minmax(180px,.7fr) 1.3fr; gap: 24px; align-items: center; margin-top: 18px; padding: 16px 18px; border: 1px dashed rgba(184,154,90,.22); border-radius: 7px; background: rgba(184,154,90,.025); }
+.identity-add-campaign > div:first-child { display: grid; gap: 4px; }
+.identity-add-campaign > div:first-child > span { color: #b89a5a; font-size: 7px; letter-spacing: .12em; text-transform: uppercase; }
+.identity-add-campaign > div:first-child strong { font: 400 15px Iowan Old Style,Georgia,serif; }
+.identity-add-campaign > div:first-child small { color: rgba(242,237,228,.28); font-size: 8px; }
+.identity-import-actions { display: flex; justify-content: flex-end; align-items: center; gap: 7px; flex-wrap: wrap; }
+.identity-import-actions button, .campaign-character-actions button, .character-add-table button, .request-resolution button { min-height: 34px; border: 1px solid rgba(242,237,228,.10); border-radius: 5px; padding: 0 11px; background: rgba(255,255,255,.025); color: rgba(242,237,228,.62); cursor: pointer; font-size: 8px; }
+.identity-import-actions button:hover, .campaign-character-actions button:hover, .character-add-table button:hover, .request-resolution button:hover { border-color: rgba(184,154,90,.34); color: #d0b36f; }
+.identity-import-actions button:disabled, .campaign-character-actions button:disabled, .character-add-table button:disabled, .request-resolution button:disabled { opacity: .35; cursor: not-allowed; }
+.identity-import-actions select { max-width: 230px; min-height: 34px; padding: 0 9px; font-size: 8px; }
+.campaign-character-versions { display: grid; gap: 12px; margin-top: 18px; }
+.campaign-character-version { padding: 20px; border: 1px solid rgba(242,237,228,.06); border-radius: 7px; background: rgba(0,0,0,.16); }
+.campaign-version-head { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.campaign-version-head > div { display: grid; gap: 4px; }
+.campaign-version-head h3 { margin: 2px 0 0; font: 400 18px Iowan Old Style,Georgia,serif; }
+.campaign-version-head strong { color: rgba(242,237,228,.68); font-size: 10px; }
+.campaign-version-head small { color: rgba(242,237,228,.30); font-size: 8px; }
+.character-source-badge { padding: 5px 7px; border: 1px solid rgba(184,154,90,.18); border-radius: 999px; color: rgba(184,154,90,.72); font-size: 6px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.character-add-table { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 15px; }
+.character-add-table > span { margin-right: 4px; color: rgba(242,237,228,.28); font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+.campaign-character-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(242,237,228,.045); }
+.character-change-request { margin-top: 15px; padding: 14px 16px; border-left: 2px solid rgba(184,154,90,.38); background: rgba(184,154,90,.035); }
+.character-change-request header { display: flex; justify-content: space-between; gap: 16px; }
+.character-change-request header > div { display: grid; gap: 4px; }
+.character-change-request header strong { font: 400 13px Iowan Old Style,Georgia,serif; }
+.character-change-request header small { color: rgba(242,237,228,.24); font-size: 7px; }
+.character-change-diff { display: grid; gap: 4px; margin: 12px 0; padding-left: 18px; color: rgba(242,237,228,.43); font-size: 8px; }
+.request-resolution { display: flex; justify-content: flex-end; gap: 7px; }
+.request-resolution .product-primary { min-height: 34px; color: #111114; }
+.character-private-sheet { max-width: 620px; }
+.character-private-sheet h2 { margin: 7px 0 8px; font: 400 26px Iowan Old Style,Georgia,serif; }
+.character-private-sheet > p { margin: 0 0 20px; color: rgba(242,237,228,.38); font-size: 9px; line-height: 1.6; }
+.character-private-sheet textarea { width: 100%; resize: vertical; padding: 11px; line-height: 1.5; }
+.character-lifecycle-builder .character-library { max-width: 980px; max-height: 90dvh; overflow: auto; }
+@media (max-width: 760px) {
+  .character-lifecycle-heading { display: grid; align-items: start; }
+  .character-lifecycle-heading .product-primary { width: 100%; }
+  .character-identity-create, .identity-add-campaign { grid-template-columns: 1fr; align-items: stretch; }
+  .identity-create-actions, .identity-import-actions { justify-content: stretch; }
+  .identity-create-actions > *, .identity-import-actions > button { flex: 1; }
+  .identity-import-actions select { max-width: none; width: 100%; }
+  .character-identity-card { padding: 20px 16px; }
+  .campaign-version-head { display: grid; }
+  .character-source-badge { justify-self: start; }
+  .campaign-character-actions > button, .character-add-table > button { flex: 1 1 42%; }
+  .request-resolution > button { flex: 1; }
+}

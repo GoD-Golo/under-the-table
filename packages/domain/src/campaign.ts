@@ -50,6 +50,10 @@ export interface TableMembership {
 export interface CampaignCharacterMembership {
   campaignId: string;
   characterId: string;
+  identityId: string;
+  sourceKind: "legacy_migration" | "level1" | "current_build";
+  sourceCharacterId: string | null;
+  createdAt: string;
 }
 
 export interface TableCharacterMembership {

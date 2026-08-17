@@ -100,6 +100,15 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - product browsing uses a socket-free HTTP read model; Colyseus mounts only for Play/Director;
 - browser Back/Forward, mobile scroll reset and Virtual Table -> Table Home semantics are explicit.
 
+**Vertical Slice 008** implements the character campaign lifecycle:
+
+- reusable `CharacterIdentity` records own independent CampaignCharacter versions;
+- `Add to Campaign` supports a fixed level-1 build or explicit copy-current-build import with no later cross-campaign synchronization;
+- `Add to Table` is membership/reference only and the live room projects only characters referenced by its Table;
+- structural changes use pending DM review with stale-write protection, while gameplay HP/combat mutations remain Colyseus-authoritative;
+- DM structural override and DM-private character state have explicit product/data boundaries;
+- the live Character Library is selection-only so structural lifecycle rules cannot be bypassed through the normal runtime UI.
+
 Full content/choice resolution (background feats, species/class features, inventory/equipment, Weapon Mastery and spells), the general targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
 
 ## Development architecture
@@ -126,6 +135,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-005.md` — playable character + initiative loop evidence
 - `docs/VERTICAL-SLICE-006.md` — checks + basic combat loop evidence
 - `docs/VERTICAL-SLICE-007.md` — Product Home, Campaign/Table context and navigation evidence
+- `docs/VERTICAL-SLICE-008.md` — CharacterIdentity, campaign versions, Table references and governance evidence
 - `docs/BRAND-AND-LANDING.md` — product identity, landing composition and visual-language boundaries
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records

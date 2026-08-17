@@ -1,6 +1,6 @@
 # Development security posture
 
-The current Vertical Slice 001 through 006 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
+The current Vertical Slice 001 through 008 environment has **no application authentication or authorization**. That is a conscious product decision, not an accidental omission.
 
 Compensating development controls:
 
@@ -16,7 +16,7 @@ Compensating development controls:
 
 ## Known security limitation
 
-All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation, fog reveal and uploads. They can also create/edit characters, mutate any character resource, roll/advance/clear initiative, quick-add NPC combatants and issue basic attacks for any eligible active character because authenticated ownership and table roles are not implemented yet. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. The VS003.7 fog overlay is not a secrecy boundary because scene assets still reach the browser. DM-secret notes/visibility and real ownership must not rely on client-side masking or provisional client names; identity and authorization need their own design and enforcement.
+All connected development clients can currently use director controls, including `Present to table`, scene creation, token creation, fog reveal and uploads. Any client that can reach the private gateway can also call VS008 Product lifecycle endpoints for character identity/campaign membership, structural change requests, DM-style direct overrides and the separate DM-private-state endpoint because authenticated ownership and campaign/table capabilities are not implemented yet. Live clients can still mutate any visible character resource, roll/advance/clear initiative, quick-add NPC combatants and issue basic attacks for any eligible active character. Lore implemented in VS002 is therefore player-safe only. Claimed player tokens can reject moves from another local client name, but that name is user-controlled and is **not authentication**. The VS003.7 fog overlay is not a secrecy boundary because scene assets still reach the browser. VS008 keeps DM-private character data out of the general Product snapshot, but its private endpoint is not permission-enforced and therefore is not a secrecy boundary. DM-secret notes/visibility and real ownership must not rely on client-side masking, endpoint naming, or provisional client names; identity and authorization need their own design and enforcement.
 
 This environment is suitable for a private development preview, not public production.
 

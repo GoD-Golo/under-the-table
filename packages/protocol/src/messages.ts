@@ -9,8 +9,6 @@ export const MESSAGE = {
   moveToken: "move_token",
   setFogEnabled: "set_fog_enabled",
   setFogCell: "set_fog_cell",
-  createCharacter: "create_character",
-  updateCharacter: "update_character",
   rollInitiative: "roll_initiative",
   advanceInitiative: "advance_initiative",
   clearInitiative: "clear_initiative",
@@ -38,8 +36,6 @@ export interface SetFogCellCommand { sceneId: string; column: number; row: numbe
 export const SERVER_MESSAGE = { commandError: "command_error" } as const;
 export interface CommandErrorMessage { message: string }
 
-export interface CreateCharacterCommand { name: string; rulesetId: string; maxHp: number; rulesetData?: Record<string, unknown> }
-export interface UpdateCharacterCommand { characterId: string; name: string; maxHp: number; rulesetData: Record<string, unknown> }
 
 export interface RollInitiativeCommand { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }
 export interface PerformBasicAttackCommand { attackerCharacterId: string; attackId: string; targetEntryId: string }

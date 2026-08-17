@@ -23,6 +23,7 @@ const CLASS_ARRAYS: Record<Dnd2024Class, Dnd2024AbilityScores> = {
 
 interface BuilderProps {
   character?: LiveCharacterView | null;
+  fixedLevel?: number | undefined;
   onSave: (command: { name: string; maxHp: number; rulesetData: Dnd2024CharacterData }) => void;
   onCancel: () => void;
 }
@@ -45,14 +46,14 @@ function initialData(character?: LiveCharacterView | null): Dnd2024CharacterData
   };
 }
 
-export function CharacterBuilder({ character, onSave, onCancel }: BuilderProps) {
+export function CharacterBuilder({ character, fixedLevel, onSave, onCancel }: BuilderProps) {
   const initial = initialData(character);
   const existingHp = character?.resources.find((resource) => resource.key === "hp");
   const [name, setName] = useState(character?.name ?? "");
   const [classId, setClassId] = useState<Dnd2024Class>(initial.classId);
   const [species, setSpecies] = useState(initial.species);
   const [background, setBackground] = useState(initial.background);
-  const [level, setLevel] = useState(initial.level);
+  const [level, setLevel] = useState(fixedLevel ?? initial.level);
   const [abilities, setAbilities] = useState<Dnd2024AbilityScores>(initial.abilities);
   const [armorClass, setArmorClass] = useState(initial.armorClass);
   const [speed, setSpeed] = useState(initial.speed);
@@ -101,7 +102,7 @@ export function CharacterBuilder({ character, onSave, onCancel }: BuilderProps) 
     <div className="builder-grid builder-identity-grid">
       <label><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="Adventurer name" /></label>
       <label><span>Class</span><select value={classId} onChange={(event) => setClassId(event.target.value as Dnd2024Class)}>{DND2024_CLASSES.map((item) => <option value={item} key={item}>{labelize(item)}</option>)}</select></label>
-      <label><span>Level</span><input type="number" min={1} max={20} value={level} onChange={(event) => setLevel(Math.max(1, Math.min(20, Number(event.target.value))))} /></label>
+      <label><span>Level</span><input type="number" min={1} max={20} value={level} disabled={fixedLevel !== undefined} onChange={(event) => setLevel(Math.max(1, Math.min(20, Number(event.target.value))))} /></label>
       <label><span>Species</span><select value={species} onChange={(event) => setSpecies(event.target.value)}>{DND2024_SPECIES.map((item) => <option value={item} key={item}>{labelize(item)}</option>)}</select></label>
       <label><span>Background</span><select value={background} onChange={(event) => setBackground(event.target.value)}>{DND2024_BACKGROUNDS.map((item) => <option value={item} key={item}>{labelize(item)}</option>)}</select></label>
     </div>

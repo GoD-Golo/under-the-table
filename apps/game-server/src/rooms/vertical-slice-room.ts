@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { Room, type Client } from "@colyseus/core";
 import {
-  normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
+  STARTER_TABLE_ID, normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
   type CharacterRuntime, type GameEvent, type InitiativeState, type RecentEvent, type SceneToken, type SessionSnapshot
 } from "@utt/domain";
 import { DND2024_RULESET_ID, abilityModifier, attackModifier, normalizeDnd2024Data } from "@utt/rules-dnd2024";
@@ -16,7 +16,6 @@ import {
   SERVER_MESSAGE,
   SESSION_ID,
   type AdjustHpCommand,
-  type CreateCharacterCommand,
   type CreateTokenCommand,
   type JoinOptions,
   type MoveTokenCommand,
@@ -25,8 +24,7 @@ import {
   type RollCommand,
   type RollInitiativeCommand,
   type SetFogCellCommand,
-  type SetFogEnabledCommand,
-  type UpdateCharacterCommand
+  type SetFogEnabledCommand
 } from "@utt/protocol";
 import { surrealStore } from "../persistence/surreal-store.js";
 import { createBasicAttackEvent, createHpEvent, createInitiativeAdvancedEvent, createInitiativeClearedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent, resolveBasicAttack } from "../session-logic.js";
@@ -106,7 +104,7 @@ export class VerticalSliceRoom extends Room {
     await surrealStore.ensureStarterCharacterFromLegacySnapshot(SESSION_ID);
     const snapshot = await surrealStore.loadSnapshot(SESSION_ID);
     if (snapshot) this.restoreSnapshot(snapshot);
-    this.replaceCharacters(await surrealStore.listCharacterRuntimes());
+    this.replaceCharacters(await surrealStore.listTableCharacterRuntimes(STARTER_TABLE_ID));
     this.replaceTokens(await surrealStore.listSceneTokens(this.state.activeSceneId));
     this.replaceFog(await surrealStore.getSceneFog(this.state.activeSceneId));
     console.info(`[room] created ${this.roomId}; restored sequence=${snapshot?.sequence ?? 0}, characters=${this.state.characters.size}`);
@@ -119,12 +117,6 @@ export class VerticalSliceRoom extends Room {
     });
     this.onMessage(MESSAGE.presentScene, (client, message: PresentSceneCommand) => {
       this.enqueue(client, () => this.handlePresentScene(client, message));
-    });
-    this.onMessage(MESSAGE.createCharacter, (client, message: CreateCharacterCommand) => {
-      this.enqueue(client, () => this.handleCreateCharacter(client, message));
-    });
-    this.onMessage(MESSAGE.updateCharacter, (client, message: UpdateCharacterCommand) => {
-      this.enqueue(client, () => this.handleUpdateCharacter(client, message));
     });
     this.onMessage(MESSAGE.rollInitiative, (client, message: RollInitiativeCommand) => {
       this.enqueue(client, () => this.handleRollInitiative(client, message));
@@ -213,23 +205,8 @@ export class VerticalSliceRoom extends Room {
     };
   }
 
-  private async handleCreateCharacter(_client: Client, command: CreateCharacterCommand): Promise<void> {
-    const rulesetData = command?.rulesetId === DND2024_RULESET_ID ? normalizeDnd2024Data(command?.rulesetData) : command?.rulesetData ?? {};
-    const runtime = await surrealStore.createCharacter({
-      name: command?.name, rulesetId: command?.rulesetId, maxHp: command?.maxHp, rulesetData
-    });
-    this.state.characters.set(runtime.definition.id, characterToState(runtime));
-  }
-
-  private async handleUpdateCharacter(_client: Client, command: UpdateCharacterCommand): Promise<void> {
-    if (typeof command?.characterId !== "string" || !command.characterId) throw new Error("characterId is required");
-    const existing = this.state.characters.get(command.characterId);
-    if (!existing) throw new Error("character not found");
-    const rulesetData = existing.rulesetId === DND2024_RULESET_ID ? normalizeDnd2024Data(command?.rulesetData) : command?.rulesetData ?? {};
-    const runtime = await surrealStore.updateCharacter({
-      characterId: command.characterId, name: command?.name, maxHp: command?.maxHp, rulesetData
-    });
-    this.state.characters.set(runtime.definition.id, characterToState(runtime));
+  public async refreshCharactersFromPersistence(): Promise<void> {
+    this.replaceCharacters(await surrealStore.listTableCharacterRuntimes(STARTER_TABLE_ID));
   }
 
   private async handleRollInitiative(client: Client, command: RollInitiativeCommand): Promise<void> {
