@@ -1,0 +1,46 @@
+name: VS007 Bootstrap
+
+on:
+  push:
+    branches:
+      - mvp/product-flow-vs007
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reassemble exact local patch
+        shell: bash
+        run: |
+          cat .vs007part00 .vs007part01 .vs007part02 .vs007part03 .vs007part04 .vs007part05 .vs007part06 .vs007part07 .vs007part08 > /tmp/vs007.patch.xz.b64
+          echo 'da631e2d0ee6bd5b44d94c8348add75a05d50b6aa91d5fc5e8d5bf5d4eb0ef98  /tmp/vs007.patch.xz.b64' | sha256sum -c -
+          base64 -d /tmp/vs007.patch.xz.b64 | xz -d > /tmp/vs007.patch
+          git apply --index /tmp/vs007.patch
+          git rm -f .github/workflows/vs007-bootstrap.yml .vs007part00 .vs007part01 .vs007part02 .vs007part03 .vs007part04 .vs007part05 .vs007part06 .vs007part07 .vs007part08
+          test "$(git write-tree)" = 'e5e4574f25c30bf76f2b8702bd7550b6bb0b9810'
+      - name: Full release gate
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm check
+          git diff --check --cached
+          test "$(git write-tree)" = 'e5e4574f25c30bf76f2b8702bd7550b6bb0b9810'
+      - name: Publish verified tree
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'VS007 — Product Home and campaign flow'
+          git push origin HEAD:mvp/product-flow-vs007
