@@ -38,4 +38,6 @@ Full workspace gate passed: strict typecheck, ESLint, 14 domain tests, 4 game-se
 ## Boundaries / non-goals
 `Offline local` does **not** mean the application shell is installable or bootable with no web server; PWA/service-worker caching is future work. Offline changes are not synchronized or conflict-merged into a campaign. Auth/roles, player-specific scene filtering, walls, doors, vision/fog, initiative/targeting and full Character/Action/Effect engines remain separate milestones.
 
-An abrupt loss of an already-open Colyseus WebSocket was not observed to flip the UI to `disconnected` within a 15-second QA window; startup with the campaign runtime unavailable and explicit retry/reconnect are proven. Connection liveness/heartbeat UX remains a future reliability concern rather than being hidden by this slice.
+An abrupt loss of an already-open Colyseus WebSocket was not observed to flip the UI to `disconnected` within a 15-second QA window; startup with the campaign runtime unavailable and explicit retry/reconnect are proven. At VS003.6, connection liveness/heartbeat UX therefore remained a future reliability concern rather than being hidden by this slice.
+
+**Later status:** VS010 resolves this historical reliability gap with application-level heartbeat, stale-state invalidation and explicit UTT-owned Retry semantics. The observation above remains as the evidence boundary of VS003.6 itself.

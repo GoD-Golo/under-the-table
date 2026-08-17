@@ -17,6 +17,7 @@ interface PlayWorkspaceProps {
   clientName: string;
   connectionStatus: "connecting" | "connected" | "disconnected";
   connectionError: string | null;
+  commandError: string | null;
   onRoll: (sides: number, modifier: number) => void;
   onAdjustHp: (characterId: string, delta: number) => void;
   onRollInitiative: (command: { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }) => void;
@@ -25,6 +26,7 @@ interface PlayWorkspaceProps {
   onPerformBasicAttack: (command: { attackerCharacterId: string; attackId: string; targetEntryId: string }) => void;
   onMoveToken: (tokenId: string, x: number, y: number) => void;
   onReconnect: () => void;
+  onDismissCommandError: () => void;
   onImmersiveChange: (immersive: boolean) => void;
   onExitTable: () => void;
 }
@@ -100,7 +102,7 @@ function VirtualTable({ state, selectedCharacterId, onSelectCharacter, clientNam
   );
 }
 
-export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onImmersiveChange, onExitTable }: PlayWorkspaceProps) {
+export function PlayWorkspace({ campaignState, clientName, connectionStatus, connectionError, commandError, onRoll, onAdjustHp, onRollInitiative, onAdvanceInitiative, onClearInitiative, onPerformBasicAttack, onMoveToken, onReconnect, onDismissCommandError, onImmersiveChange, onExitTable }: PlayWorkspaceProps) {
   const [selectedCharacterId, setSelectedCharacterIdState] = useState<string | null>(() => window.localStorage.getItem("utt.play.character.v1"));
   const offline = useOfflineCompanion(campaignState, selectedCharacterId);
   const [mode, setModeState] = useState<PlayMode>(() => loadPlayMode());
@@ -142,6 +144,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
   }, [campaignState, companionSource, connectionStatus]);
 
   const effectiveSource: CompanionSource = companionSource === "campaign" && campaignState ? "campaign" : "offline";
+  const connectionLabel = connectionStatus === "connected" ? "Campaign connected" : connectionStatus === "connecting" ? "Connecting campaign…" : "Campaign unavailable";
   const companionState = effectiveSource === "campaign" && campaignState ? campaignState : offline.state;
 
   const setMode = (next: PlayMode) => { setModeState(next); window.localStorage.setItem("utt.play.mode.v1", next); };
@@ -174,7 +177,7 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
           <button type="button" className={mode === "table" ? "active" : ""} disabled={!campaignState} onClick={() => setMode("table")}>Virtual Table</button>
           <button type="button" className={mode === "companion" ? "active" : ""} onClick={() => setMode("companion")}>Companion</button>
         </div>
-        <div className="play-toolbar-status"><span className={`status-pip ${connectionStatus}`} /><span>{campaignState ? "Campaign connected" : "No live campaign"}</span></div>
+        <div className="play-toolbar-status"><span className={`status-pip ${connectionStatus}`} /><span>{connectionLabel}</span></div>
         <div className="play-toolbar-actions">
           <button type="button" className="ghost-button" onClick={onExitTable}>← Table Home</button>
           {campaignState ? <button type="button" className="ghost-button" onClick={() => setCharacterLibraryOpen(true)}>Characters</button> : null}
@@ -192,6 +195,8 @@ export function PlayWorkspace({ campaignState, clientName, connectionStatus, con
       {characterLibraryOpen && campaignState ? <CharacterLibrary characters={campaignState.characters} selectedCharacterId={selectedCharacterId} onSelect={selectCharacter} onClose={() => setCharacterLibraryOpen(false)} /> : null}
 
       {connectionError && !campaignState ? <div className="play-connection-note"><span>{connectionError}</span><button type="button" onClick={onReconnect}>Retry campaign</button></div> : null}
+
+      {commandError ? <div className="play-command-error" role="alert"><span>{commandError}</span><button type="button" onClick={onDismissCommandError} aria-label="Dismiss live command error">×</button></div> : null}
 
       {mode === "table" ? (
         campaignState ? <VirtualTable state={campaignState} selectedCharacterId={selectedCharacterId} onSelectCharacter={selectCharacter} clientName={clientName} onRoll={onRoll} onAdjustHp={onAdjustHp} onMoveToken={onMoveToken} onRollInitiative={onRollInitiative} onAdvanceInitiative={onAdvanceInitiative} onClearInitiative={onClearInitiative} onPerformBasicAttack={onPerformBasicAttack} showHud={showHud} resetToken={resetToken} /> : <section className="play-unavailable"><div className="sigil">UTT</div><h1>Virtual Table needs a live campaign</h1><p>Companion can keep running from local state while the campaign is unavailable.</p><button type="button" className="game-button primary" onClick={() => setMode("companion")}>Open Companion</button></section>

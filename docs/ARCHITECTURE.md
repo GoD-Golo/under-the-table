@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **near-MVP foundation + VS009 Permissions & Co-DM Scopes**
+Status: **near-MVP foundation + VS010 Live Reliability & Recovery**
 
 ## Boundary model
 
@@ -47,6 +47,8 @@ VS008 adds `CharacterIdentity` above the existing durable character data, which 
 
 VS009 adds a centralized policy layer between transports and mutations. Campaign/world and Table/session capabilities are separate, role labels are configuration presets only, and campaign world scopes can be whole-campaign or selected canonical entities. Atlas HTTP, Character lifecycle HTTP and live-room commands all call the same policy service. The current transport principal is still the fixed `local-preview` Owner; authentication will replace principal resolution, not the policy rules. Full Atlas delivery requires campaign-wide `world.read` until server-side scoped projection exists.
 
+VS010 adds an application-level live liveness boundary. Visible clients heartbeat the joined room every 2 seconds and invalidate synchronized campaign state after 6 seconds without acknowledgement; hidden documents suspend expiry and probe immediately when visible again. Transport leave and browser offline use the same stale-state invalidation path. Heartbeats bypass gameplay command persistence entirely. Colyseus automatic room reconnection is disabled so recovery is explicit through UTT Retry and cannot silently replace Offline Companion state. Connection failures and command rejections are modeled separately in the client.
+
 The current Colyseus definition is still one `vertical_slice` live room/session. Persistent data and navigation can represent multiple Tables, but simultaneous independent per-Table rooms are not implemented yet and must not be inferred from the current product model.
 
 ## Current durable world model
@@ -89,7 +91,7 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
 
-**Presentation/local-only state:** pan/zoom, Play/Companion mode, selected character id per browser, current private browse scene, selected hotspot, freeform widget placements/z-order, optional snap-grid layout, and explicit Offline Companion character/dice/log state. These are not authoritative campaign truth. Play and Director use the same role-neutral freeform primitive with different widget content.
+**Presentation/local-only state:** pan/zoom, Play/Companion mode, selected character id per browser, current private browse scene, selected hotspot, freeform widget placements/z-order, optional snap-grid layout, explicit Offline Companion character/dice/log state, and current live connection/liveness/error status. These are not authoritative campaign truth. Play and Director use the same role-neutral freeform primitive with different widget content.
 
 ## Not implemented yet
 

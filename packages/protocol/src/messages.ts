@@ -12,7 +12,8 @@ export const MESSAGE = {
   rollInitiative: "roll_initiative",
   advanceInitiative: "advance_initiative",
   clearInitiative: "clear_initiative",
-  performBasicAttack: "perform_basic_attack"
+  performBasicAttack: "perform_basic_attack",
+  heartbeat: "heartbeat"
 } as const;
 
 export interface JoinOptions { clientName?: string }
@@ -33,8 +34,10 @@ export interface MoveTokenCommand { tokenId: string; x: number; y: number }
 export interface SetFogEnabledCommand { sceneId: string; enabled: boolean }
 export interface SetFogCellCommand { sceneId: string; column: number; row: number; revealed: boolean }
 
-export const SERVER_MESSAGE = { commandError: "command_error" } as const;
+export const SERVER_MESSAGE = { commandError: "command_error", heartbeat: "heartbeat" } as const;
 export interface CommandErrorMessage { message: string }
+export interface HeartbeatCommand { nonce: string }
+export interface HeartbeatMessage { nonce: string }
 
 
 export interface RollInitiativeCommand { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }
