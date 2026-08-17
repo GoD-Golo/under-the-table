@@ -49,3 +49,15 @@ World exploration and live maps should share a flexible scene model. Scenes are 
 An uploaded image with clickable pins must remain enough to build a useful campaign atlas. More advanced tools — hex-map authoring, configurable travel procedures, battle-map creation, vision and automation — layer on top without replacing that simple path.
 
 The authoring goal is fluid composition: click an area or pin, enter another scene, and continue linking as deeply or laterally as the campaign needs.
+
+## Product flow principle
+
+The branded landing page is a showcase and entry point. The actual product begins at **Home**.
+
+Home should expose campaigns, characters, active tables, and later upcoming scheduling/notification work without becoming an enterprise dashboard. Campaigns, Tables, Sessions, and Live Rooms are separate product concepts; large campaigns may contain several Tables with different rosters.
+
+Characters are first-class. A reusable CharacterIdentity may produce independent CampaignCharacters in different campaigns, while every Table in one campaign references the same CampaignCharacter rather than creating a copy.
+
+Roles such as Owner, DM, Co-DM, and Player are presentation labels over capabilities and scopes. Co-DM access may cover all or only part of the World Graph, and Table permissions are separate from world-authoring permissions.
+
+See `PRODUCT-FLOW-DIRECTION.md` and ADRs 0023–0025 for the accepted direction and planned slices.

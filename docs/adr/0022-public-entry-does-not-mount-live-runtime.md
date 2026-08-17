@@ -4,21 +4,21 @@ Status: Accepted
 
 ## Context
 
-Before the landing pass, `App` mounted `useLiveRoom()` immediately because Director/Play were the only top-level surfaces. A real landing page should not open a Colyseus room merely because somebody views the product entry surface.
+Before the landing pass, `App` mounted `useLiveRoom()` immediately because Director/Play were the only top-level surfaces. VS007 adds Home, Campaign, Table and Character browsing. Neither a showcase visit nor ordinary product navigation should create Colyseus presence.
 
 ## Decision
 
-The React root now has a small presentation-level entry state:
+The React root separates read-only/product navigation from runtime participation.
 
-- root/no hash → Landing;
-- `#play` → Play runtime;
-- `#director` → Director runtime.
+- root/no hash -> Landing showcase;
+- Home/Campaigns/Characters/Campaign/Table routes -> HTTP product read model;
+- contextual Table Play and Campaign World/Director routes -> runtime workspace.
 
-`useLiveRoom()` lives inside the runtime workspace component, so the landing surface does not create a room or load campaign authority until the user enters Play or Director.
+`useLiveRoom()` lives only inside the runtime workspace. Product browsing fetches `/game/api/product`, so no live room is created until the user explicitly enters Play/Companion or Director.
 
 ## Consequences
 
-- marketing/design iteration is isolated from live authority;
-- passive landing visits do not create presence/session connections;
-- existing Director/Play state and server authority remain unchanged;
-- hash routing is intentionally minimal and can later be replaced by a router without changing the live-room boundary.
+- showcase and product browsing are isolated from live authority/presence;
+- Campaign/Table context can be inspected without joining a Session;
+- entering a runtime surface opens the room and leaving it closes that connection;
+- hash routing is still intentionally minimal and can later be replaced without changing this boundary.

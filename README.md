@@ -87,9 +87,18 @@ The product goal is one continuous tool for world building, lore, scene navigati
 
 - root landing page with the dragon-eye-under-table identity;
 - responsive laptop/phone/tablet/table choreography built in CSS/SVG;
-- direct entry into Play or Director without mounting Colyseus on passive landing visits;
+- entry into the product without mounting Colyseus on passive showcase visits;
 - lightweight spell visual-language preview by base slot and school;
 - matching favicon and runtime home mark.
+
+**Vertical Slice 007** turns the feature set into a coherent product flow:
+
+- Home is the real product entry, with Campaigns, Characters and active-table continuation;
+- Campaign and Table are persistent contexts separate from Session and Live Room;
+- Campaign Home, Table Home and Characters Home route existing Director/Play surfaces through those contexts;
+- existing characters are linked as campaign/table memberships without duplicating their durable state;
+- product browsing uses a socket-free HTTP read model; Colyseus mounts only for Play/Director;
+- browser Back/Forward, mobile scroll reset and Virtual Table -> Table Home semantics are explicit.
 
 Full content/choice resolution (background feats, species/class features, inventory/equipment, Weapon Mastery and spells), the general targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
 
@@ -103,6 +112,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 
 - `AGENTS.md` — rules for future engineering agents
 - `docs/VISION.md` — product direction and non-negotiable principles
+- `docs/PRODUCT-FLOW-DIRECTION.md` — Home/Campaign/Table/Character flow, permissions direction and planned slices
 - `docs/ARCHITECTURE.md` — current implemented technical boundaries
 - `docs/SCENE-ATLAS-DIRECTION.md` — Atlas/map/lore direction beyond the proven primitive
 - `docs/HOMELAB-DEVELOPMENT.md` — why the homelab changed feasible choices
@@ -115,6 +125,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-004.md` — Character Foundation evidence
 - `docs/VERTICAL-SLICE-005.md` — playable character + initiative loop evidence
 - `docs/VERTICAL-SLICE-006.md` — checks + basic combat loop evidence
+- `docs/VERTICAL-SLICE-007.md` — Product Home, Campaign/Table context and navigation evidence
 - `docs/BRAND-AND-LANDING.md` — product identity, landing composition and visual-language boundaries
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
