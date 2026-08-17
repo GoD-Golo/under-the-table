@@ -190,7 +190,9 @@ export function CharacterLifecycleHome({ data, onTable, onRefresh }: Props) {
     <div className="character-identities-grid">
       {data.identities.map((identity) => {
         const versions = data.characters.filter((character) => character.identityId === identity.id);
-        const missingCampaigns = data.campaigns.filter((campaign) => !versions.some((character) => character.campaignId === campaign.id));
+        const missingCampaigns = data.campaigns.filter((campaign) =>
+          campaign.capabilities.includes("character.propose") && !versions.some((character) => character.campaignId === campaign.id)
+        );
         return <article className="character-identity-card" key={identity.id}>
           <header className="identity-card-head"><div className="character-avatar large">{identity.displayName.slice(0, 1)}</div><div><span className="product-kicker">Character Identity</span><h2>{identity.displayName}</h2><small>{versions.length} campaign version{versions.length === 1 ? "" : "s"}</small></div></header>
 
@@ -208,19 +210,24 @@ export function CharacterLifecycleHome({ data, onTable, onRefresh }: Props) {
             {versions.map((character) => {
               const campaign = data.campaigns.find((item) => item.id === character.campaignId);
               const campaignTables = data.tables.filter((table) => table.campaignId === character.campaignId);
-              const availableTables = campaignTables.filter((table) => !character.tableIds.includes(table.id));
+              const availableTables = campaignTables.filter((table) =>
+                table.capabilities.includes("table.manage") && !character.tableIds.includes(table.id)
+              );
               const pending = data.changeRequests.filter((request) => request.characterId === character.id && request.status === "pending");
-              const canManage = Boolean(campaign?.roleLabels.some((role) => role === "owner" || role === "dm" || role === "co_dm"));
+              const canPropose = Boolean(campaign?.capabilities.includes("character.propose"));
+              const canReview = Boolean(campaign?.capabilities.includes("character.review"));
+              const canEdit = Boolean(campaign?.capabilities.includes("character.edit"));
+              const canPrivate = Boolean(campaign?.capabilities.includes("character.private"));
               return <section className="campaign-character-version" key={character.id}>
                 <div className="campaign-version-head"><div><span className="product-kicker">Campaign version</span><h3>{campaign?.name ?? "Unknown campaign"}</h3><strong>{character.name}</strong><small>{versionLabel(character)} · {character.hp ? `${character.hp.current}/${character.hp.max} HP` : "No HP"}</small></div><span className="character-source-badge">{character.sourceKind.replaceAll("_", " ")}</span></div>
                 <div className="character-table-tags">{character.tableIds.map((tableId) => { const table = data.tables.find((item) => item.id === tableId); return table ? <button type="button" key={tableId} onClick={() => onTable(tableId)}>{table.name} <span>→</span></button> : null; })}</div>
                 {availableTables.length ? <div className="character-add-table"><span>Add to Table</span>{availableTables.map((table) => <button type="button" disabled={busy} key={table.id} onClick={() => void addToTable(character.id, table.id)}>+ {table.name}</button>)}</div> : null}
-                <div className="campaign-character-actions"><button type="button" disabled={busy} onClick={() => setBuilder({ kind: "request", characterId: character.id })}>Request changes</button>{canManage ? <><button type="button" disabled={busy} onClick={() => setBuilder({ kind: "direct", characterId: character.id })}>DM override</button><button type="button" disabled={busy} onClick={() => void openPrivateState(character.id)}>Private state</button></> : null}</div>
+                <div className="campaign-character-actions">{canPropose ? <button type="button" disabled={busy} onClick={() => setBuilder({ kind: "request", characterId: character.id })}>Request changes</button> : null}{canEdit ? <button type="button" disabled={busy} onClick={() => setBuilder({ kind: "direct", characterId: character.id })}>DM override</button> : null}{canPrivate ? <button type="button" disabled={busy} onClick={() => void openPrivateState(character.id)}>Private state</button> : null}</div>
 
                 {pending.map((request) => <article className="character-change-request" key={request.id}>
                   <header><div><span className="product-kicker">Pending change request</span><strong>{request.message || "Structural update"}</strong></div><small>{request.requestedBy}</small></header>
                   <RequestDiff current={character} proposedName={request.proposedName} proposedMaxHp={request.proposedMaxHp} proposedRulesetData={request.proposedRulesetData} />
-                  {canManage ? <div className="request-resolution"><button type="button" disabled={busy} onClick={() => void resolveRequest(request.id, "reject")}>Reject</button><button className="product-primary" type="button" disabled={busy} onClick={() => void resolveRequest(request.id, "approve")}>Approve & apply</button></div> : null}
+                  {canReview ? <div className="request-resolution"><button type="button" disabled={busy} onClick={() => void resolveRequest(request.id, "reject")}>Reject</button><button className="product-primary" type="button" disabled={busy} onClick={() => void resolveRequest(request.id, "approve")}>Approve & apply</button></div> : null}
                 </article>)}
               </section>;
             })}

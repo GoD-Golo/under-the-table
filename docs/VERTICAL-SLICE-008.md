@@ -58,7 +58,7 @@ edit build
 
 Only one pending structural request is allowed per CampaignCharacter. Each request records the character's `updatedAt` value when submitted. Approval is rejected as stale if the character changed after submission, preventing a late approval from overwriting a newer DM override or other structural update.
 
-The current preview Owner/DM affordance can also perform a direct structural override. This is a product capability boundary only; authenticated authorization is not implemented yet.
+The current preview Owner/DM affordance can also perform a direct structural override. VS009 now routes that action through the `character.edit` capability, while authenticated principal resolution remains deferred.
 
 Normal gameplay damage/healing and combat resource transitions remain live-room mutations and do not create approval requests.
 

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **near-MVP foundation + VS008 Character Campaign Lifecycle**
+Status: **near-MVP foundation + VS009 Permissions & Co-DM Scopes**
 
 ## Boundary model
 
@@ -45,6 +45,8 @@ VS007 adds a durable product context in front of that live runtime. `Campaign` o
 
 VS008 adds `CharacterIdentity` above the existing durable character data, which now serves as CampaignCharacter state. Campaign versions are independent forks/imports; Table membership references a CampaignCharacter without copying it. Structural creation/progression/private authoring uses the Product HTTP lifecycle, while HP/combat gameplay remains Colyseus-authoritative. Active rooms project only their Table character memberships and are refreshed from persistence after relevant lifecycle mutations.
 
+VS009 adds a centralized policy layer between transports and mutations. Campaign/world and Table/session capabilities are separate, role labels are configuration presets only, and campaign world scopes can be whole-campaign or selected canonical entities. Atlas HTTP, Character lifecycle HTTP and live-room commands all call the same policy service. The current transport principal is still the fixed `local-preview` Owner; authentication will replace principal resolution, not the policy rules. Full Atlas delivery requires campaign-wide `world.read` until server-side scoped projection exists.
+
 The current Colyseus definition is still one `vertical_slice` live room/session. Persistent data and navigation can represent multiple Tables, but simultaneous independent per-Table rooms are not implemented yet and must not be inferred from the current product model.
 
 ## Current durable world model
@@ -83,7 +85,7 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 **Authoritative live state:** roll/event state, initiative round/order/active turn plus quick-NPC encounter vitals, presence, `activeSceneId`, projected durable character runtimes/resources, the active scene token projection, and active-scene placeholder fog projection.
 
-**Durable world/session/product state:** campaigns, Tables, membership relations, CharacterIdentities, CampaignCharacter builds/resources, structural change requests, DM-private character state, scenes, hotspots, lore entities, scene tokens, scene fog placeholder state, session events and recovery snapshots. Initiative and quick-NPC AC/HP are encounter/session data persisted inside the recovery snapshot rather than a world table. Durable character HP remains in `character_resource`. Session snapshots no longer duplicate one character name/HP.
+**Durable world/session/product state:** campaigns, Tables, capability/scope memberships, CharacterIdentities, CampaignCharacter builds/resources, structural change requests, DM-private character state, scenes, hotspots, lore entities, scene tokens, scene fog placeholder state, session events and recovery snapshots. Initiative and quick-NPC AC/HP are encounter/session data persisted inside the recovery snapshot rather than a world table. Durable character HP remains in `character_resource`. Session snapshots no longer duplicate one character name/HP.
 
 **Durable asset state:** uploaded PNG/JPEG/WebP bytes in the private `scene-assets` Docker volume. SurrealDB stores only generated asset keys and image dimensions.
 
@@ -91,4 +93,4 @@ The model deliberately permits partial entities. A scene may exist without lore;
 
 ## Not implemented yet
 
-Concurrent per-Table live rooms, saved character build snapshots/edit-and-approve/deletion lifecycle, editable Co-DM capability scopes, auth/security enforcement, scheduling/polls/notifications, campaign/table creation UI, token portraits/sizing/rotation, walls, secure dynamic vision, DM-secret delivery, travel/map authoring, deeper D&D content resolution, NPC attack automation, character ownership/token binding and the general Content/Action/Effect engines remain future work.
+Concurrent per-Table live rooms, saved character build snapshots/edit-and-approve/deletion lifecycle, authenticated principal resolution, secure scoped projections, scheduling/polls/notifications, campaign/table creation UI, token portraits/sizing/rotation, walls, secure dynamic vision, DM-secret delivery, travel/map authoring, deeper D&D content resolution, NPC attack automation, character ownership/token binding and the general Content/Action/Effect engines remain future work.

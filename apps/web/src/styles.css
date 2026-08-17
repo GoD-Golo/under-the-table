@@ -980,3 +980,76 @@ button { color: inherit; }
   .campaign-character-actions > button, .character-add-table > button { flex: 1 1 42%; }
   .request-resolution > button { flex: 1; }
 }
+
+/* VS009 campaign collaborators and capability scopes */
+.campaign-access-panel { margin-top: 44px; padding-top: 34px; border-top: 1px solid rgba(242,237,228,.06); }
+.campaign-access-heading { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:20px; }
+.campaign-access-heading h2 { margin:5px 0 4px; font:400 28px Iowan Old Style,Georgia,serif; }
+.campaign-access-heading p { margin:0; max-width:660px; color:rgba(242,237,228,.36); font-size:9px; line-height:1.55; }
+.system-access-list { display:grid; gap:8px; margin-bottom:18px; }
+.system-access-list article { display:grid; grid-template-columns:minmax(180px,.7fr) auto 1fr; align-items:center; gap:18px; padding:13px 16px; border:1px solid rgba(184,154,90,.10); border-radius:7px; background:rgba(184,154,90,.025); }
+.system-access-list article > div { display:grid; gap:3px; }
+.system-access-list strong { font:400 14px Iowan Old Style,Georgia,serif; }
+.system-access-list small,.system-access-list p { color:rgba(242,237,228,.27); font-size:7px; }
+.system-access-list p { margin:0; text-align:right; }
+.system-access-list > article > span,.access-role-pill { color:#b89a5a; font-size:7px; letter-spacing:.09em; text-transform:uppercase; }
+.access-create-card { display:grid; grid-template-columns:1fr repeat(3,minmax(130px,.55fr)); gap:14px; align-items:end; margin:18px 0; padding:18px; border:1px dashed rgba(184,154,90,.25); border-radius:8px; background:linear-gradient(110deg,rgba(184,154,90,.045),rgba(10,11,14,.75)); }
+.access-create-card h3 { margin:4px 0; font:400 18px Iowan Old Style,Georgia,serif; }
+.access-create-card p,.access-create-card label > span { color:rgba(242,237,228,.31); font-size:7px; }
+.access-create-card label { display:grid; gap:6px; }
+.access-create-card input,.access-create-card select,.access-basics input,.access-basics select,.access-scope-controls select,.policy-preview-controls select,.access-table-row select { min-height:35px; border:1px solid rgba(242,237,228,.10); border-radius:5px; padding:0 9px; background:#090a0d; color:#eee9df; outline:none; }
+.access-create-actions { display:flex; gap:7px; grid-column:1/-1; justify-content:flex-end; }
+.access-check { display:flex !important; align-items:center; gap:7px !important; color:rgba(242,237,228,.34); font-size:7px !important; }
+.access-check input { min-height:auto; }
+.campaign-access-list { display:grid; gap:14px; }
+.campaign-access-card { padding:22px; border:1px solid rgba(242,237,228,.07); border-radius:9px; background:linear-gradient(155deg,#101115,#0b0c0f 72%); }
+.campaign-access-card > header { display:flex; justify-content:space-between; gap:20px; align-items:start; padding-bottom:15px; border-bottom:1px solid rgba(242,237,228,.05); }
+.campaign-access-card h3 { margin:4px 0; font:400 22px Iowan Old Style,Georgia,serif; }
+.campaign-access-card header small { color:rgba(242,237,228,.22); font-size:6px; }
+.access-role-pill { padding:5px 7px; border:1px solid rgba(184,154,90,.18); border-radius:999px; }
+.access-basics { display:grid; grid-template-columns:1fr 180px; gap:12px; margin-top:15px; }
+.access-basics label { display:grid; gap:6px; color:rgba(242,237,228,.30); font-size:7px; }
+.access-capability-section,.access-scope-section,.access-table-section,.access-preview-section { display:grid; grid-template-columns:minmax(150px,.33fr) 1fr; gap:18px; padding:17px 0; border-bottom:1px solid rgba(242,237,228,.045); }
+.access-section-copy { display:grid; align-content:start; gap:5px; }
+.access-section-copy > span { color:rgba(242,237,228,.68); font-size:9px; font-weight:700; }
+.access-section-copy > small { color:rgba(242,237,228,.25); font-size:7px; line-height:1.5; }
+.capability-chip-grid,.table-capability-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.capability-chip-grid label,.table-capability-chips label { position:relative; display:inline-flex; align-items:center; min-height:31px; border:1px solid rgba(242,237,228,.08); border-radius:999px; padding:0 10px; background:rgba(255,255,255,.015); color:rgba(242,237,228,.37); font-size:7px; cursor:pointer; }
+.capability-chip-grid label.active,.table-capability-chips label.active { border-color:rgba(184,154,90,.33); background:rgba(184,154,90,.07); color:#cfb16d; }
+.capability-chip-grid input,.table-capability-chips input { position:absolute; opacity:0; pointer-events:none; }
+.access-scope-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.access-scope-controls select { min-width:180px; }
+.access-table-list { display:grid; gap:8px; }
+.access-table-row { display:grid; grid-template-columns:minmax(130px,.5fr) 120px 1fr auto; align-items:center; gap:10px; padding:11px 12px; border:1px solid rgba(242,237,228,.055); border-radius:6px; background:rgba(0,0,0,.14); }
+.access-table-row > div:first-child { display:grid; gap:3px; }
+.access-table-row strong { font:400 12px Iowan Old Style,Georgia,serif; }
+.access-table-row small { color:rgba(242,237,228,.24); font-size:6px; }
+.table-capability-chips label { min-height:27px; padding:0 8px; font-size:6px; }
+.access-table-actions { display:flex; gap:5px; }
+.access-table-actions button,.policy-preview-controls button { min-height:31px; border:1px solid rgba(242,237,228,.10); border-radius:5px; padding:0 9px; background:rgba(255,255,255,.025); color:rgba(242,237,228,.56); font-size:7px; cursor:pointer; }
+.policy-preview-controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.policy-preview-controls select { min-width:170px; }
+.policy-preview-controls strong { font-size:7px; letter-spacing:.04em; }
+.policy-preview-controls strong.allowed { color:#8fd5a4; }
+.policy-preview-controls strong.denied { color:#e29a9a; }
+.access-feedback { margin:11px 0 0; color:#cbb071; font-size:8px; }
+.campaign-access-card > footer { display:flex; justify-content:flex-end; gap:8px; padding-top:15px; }
+.access-empty,.access-readonly-note { padding:17px; border:1px dashed rgba(242,237,228,.08); border-radius:7px; color:rgba(242,237,228,.32); font-size:8px; }
+.access-empty { display:grid; gap:5px; }
+.access-empty strong { color:rgba(242,237,228,.58); font:400 14px Iowan Old Style,Georgia,serif; }
+.capability-note { display:block; margin-top:14px; color:rgba(242,237,228,.30); font-size:8px; line-height:1.5; }
+@media (max-width: 760px) {
+  .campaign-access-heading { display:grid; align-items:start; }
+  .campaign-access-heading .product-secondary { width:100%; }
+  .system-access-list article { grid-template-columns:1fr auto; }
+  .system-access-list p { grid-column:1/-1; text-align:left; }
+  .access-create-card { grid-template-columns:1fr; }
+  .access-create-actions { grid-column:auto; }
+  .campaign-access-card { padding:18px 14px; }
+  .access-basics,.access-capability-section,.access-scope-section,.access-table-section,.access-preview-section { grid-template-columns:1fr; }
+  .access-table-row { grid-template-columns:1fr; align-items:stretch; }
+  .access-table-actions > button { flex:1; }
+  .access-scope-controls,.policy-preview-controls { align-items:stretch; }
+  .access-scope-controls select,.policy-preview-controls select { width:100%; min-width:0; }
+  .campaign-access-card > footer { display:grid; grid-template-columns:1fr 1fr; }
+}

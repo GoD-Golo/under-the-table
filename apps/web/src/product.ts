@@ -8,10 +8,14 @@ async function readProduct(): Promise<ProductSnapshotDto> {
   return body;
 }
 
-export async function mutateProduct<T>(path: string, method: "POST" | "PATCH" | "PUT", body?: unknown): Promise<T> {
+export async function mutateProduct<T>(path: string, method: "POST" | "PATCH" | "PUT" | "DELETE", body?: unknown): Promise<T> {
   const init: RequestInit = { method, headers: { "Content-Type": "application/json" } };
   if (body !== undefined) init.body = JSON.stringify(body);
   const response = await fetch(`/game/api/product${path}`, init);
+  if (response.status === 204) {
+    if (!response.ok) throw new Error(`Product mutation failed (${response.status})`);
+    return undefined as T;
+  }
   const payload = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(payload.error ?? `Product mutation failed (${response.status})`);
   return payload;

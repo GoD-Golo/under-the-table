@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import express, { type Application, type NextFunction, type Request, type Response } from "express";
+import { PREVIEW_MEMBER_KEY, STARTER_CAMPAIGN_ID } from "@utt/domain";
 import { surrealStore } from "./persistence/surreal-store.js";
+import { PolicyDeniedError, requireCampaignCapability, requireSceneCapability } from "./policy.js";
 
 const ASSET_ROOT = process.env.SCENE_ASSET_ROOT ?? "/data/scene-assets";
 const IMAGE_TYPES = new Map([
@@ -13,7 +15,7 @@ const IMAGE_TYPES = new Map([
 
 function apiError(response: Response, error: unknown): void {
   const message = error instanceof Error ? error.message : "request failed";
-  response.status(400).json({ error: message });
+  response.status(error instanceof PolicyDeniedError ? error.statusCode : 400).json({ error: message });
 }
 
 function asyncRoute(
@@ -47,11 +49,13 @@ export function configureAtlasHttp(app: Application): void {
   }));
 
   app.get("/api/atlas", asyncRoute(async (_request, response) => {
+    await requireCampaignCapability(STARTER_CAMPAIGN_ID, PREVIEW_MEMBER_KEY, "world.read", { worldEntityId: null });
     response.setHeader("Cache-Control", "no-store");
     response.json(await surrealStore.loadAtlas());
   }));
 
   app.post("/api/scenes", express.json({ limit: "32kb" }), asyncRoute(async (request, response) => {
+    await requireCampaignCapability(STARTER_CAMPAIGN_ID, PREVIEW_MEMBER_KEY, "world.scene.edit", { worldEntityId: null });
     const body = request.body as Record<string, unknown>;
     const scene = await surrealStore.createScene({
       name: body.name,
@@ -66,7 +70,11 @@ export function configureAtlasHttp(app: Application): void {
 
   app.post("/api/scenes/:sceneId/hotspots", express.json({ limit: "32kb" }), asyncRoute(async (request, response) => {
     const sceneId = safeSceneId(request.params.sceneId ?? "");
+    await requireSceneCapability(sceneId, PREVIEW_MEMBER_KEY, "world.scene.edit");
     const body = request.body as Record<string, unknown>;
+    if (typeof body.loreSummary === "string" && body.loreSummary.trim()) {
+      await requireSceneCapability(sceneId, PREVIEW_MEMBER_KEY, "world.lore.edit");
+    }
     const createLinkedScene = typeof body.createLinkedScene === "object" && body.createLinkedScene !== null
       ? body.createLinkedScene as { name?: unknown; kind?: unknown }
       : null;
@@ -88,6 +96,7 @@ export function configureAtlasHttp(app: Application): void {
     express.raw({ type: [...IMAGE_TYPES.keys()], limit: "12mb" }),
     asyncRoute(async (request, response) => {
       const sceneId = safeSceneId(request.params.sceneId ?? "");
+      await requireSceneCapability(sceneId, PREVIEW_MEMBER_KEY, "world.scene.edit");
       const scene = await surrealStore.getScene(sceneId);
       if (!scene) throw new Error("scene not found");
       if (!Buffer.isBuffer(request.body) || request.body.length === 0) throw new Error("image body is required");

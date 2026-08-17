@@ -9,6 +9,14 @@ import {
   STARTER_CHARACTER_IDENTITY_ID,
   STARTER_SCENE_ID,
   normalizeCharacterName,
+  campaignRolePreset,
+  tableRolePreset,
+  normalizeCampaignCapabilities,
+  normalizeTableCapabilities,
+  normalizeCapabilityScopes,
+  normalizeMemberDisplayName,
+  normalizeCampaignRoleLabels,
+  normalizeTableRoleLabels,
   normalizeChangeMessage,
   normalizePrivateCharacterState,
   normalizeFogCell,
@@ -456,28 +464,23 @@ function mapCampaignTable(record: CampaignTableRecord): CampaignTable {
 }
 
 function parseMembershipScopes(value: string): CampaignMembership["scopes"] {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((scope) => {
-      if (typeof scope !== "object" || scope === null) return [];
-      const item = scope as Record<string, unknown>;
-      if (item.kind !== "campaign" && item.kind !== "world_subgraph") return [];
-      return [{
-        kind: item.kind,
-        worldEntityId: typeof item.worldEntityId === "string" ? item.worldEntityId : null,
-        includeDescendants: item.includeDescendants === true
-      }];
-    });
-  } catch { return []; }
+  try { return normalizeCapabilityScopes(JSON.parse(value) as unknown); }
+  catch { return []; }
 }
 
 function mapCampaignMembership(record: CampaignMembershipRecord): CampaignMembership {
-  return { id: record.membership_id, campaignId: record.campaign_id, memberKey: record.member_key, displayName: record.display_name, roleLabels: [...record.role_labels], capabilities: [...record.capabilities], scopes: parseMembershipScopes(record.scopes_json) };
+  return {
+    id: record.membership_id, campaignId: record.campaign_id, memberKey: record.member_key, displayName: record.display_name,
+    roleLabels: normalizeCampaignRoleLabels(record.role_labels), capabilities: normalizeCampaignCapabilities(record.capabilities),
+    scopes: parseMembershipScopes(record.scopes_json)
+  };
 }
 
 function mapTableMembership(record: TableMembershipRecord): TableMembership {
-  return { id: record.membership_id, tableId: record.table_id, memberKey: record.member_key, displayName: record.display_name, roleLabels: [...record.role_labels], capabilities: [...record.capabilities] };
+  return {
+    id: record.membership_id, tableId: record.table_id, memberKey: record.member_key, displayName: record.display_name,
+    roleLabels: normalizeTableRoleLabels(record.role_labels), capabilities: normalizeTableCapabilities(record.capabilities)
+  };
 }
 
 function mapCharacterIdentity(record: CharacterIdentityRecord): CharacterIdentity {
@@ -709,16 +712,16 @@ export class SurrealStore {
       await this.db.update<CampaignTableRecord>(new RecordId("campaign_table", STARTER_TABLE_ID)).merge({ current_session_id: sessionId, updated_at: now });
     }
 
+    const ownerPreset = campaignRolePreset("owner");
     await this.db.upsert<CampaignMembershipRecord>(new RecordId("campaign_membership", "preview-campaign-membership")).content({
       membership_id: "preview-campaign-membership", campaign_id: STARTER_CAMPAIGN_ID, member_key: PREVIEW_MEMBER_KEY,
       display_name: "Local Preview", role_labels: ["owner", "player"],
-      capabilities: ["campaign.manage", "world.edit", "scene.edit", "session.run", "table.manage", "character.manage"],
-      scopes_json: JSON.stringify([{ kind: "campaign", worldEntityId: null, includeDescendants: true }])
+      capabilities: ownerPreset.capabilities, scopes_json: JSON.stringify(ownerPreset.scopes)
     });
+    const dmTablePreset = tableRolePreset("dm");
     await this.db.upsert<TableMembershipRecord>(new RecordId("table_membership", "preview-table-membership")).content({
       membership_id: "preview-table-membership", table_id: STARTER_TABLE_ID, member_key: PREVIEW_MEMBER_KEY,
-      display_name: "Local Preview", role_labels: ["dm", "player"],
-      capabilities: ["session.run", "table.prepare", "character.play"]
+      display_name: "Local Preview", role_labels: ["dm", "player"], capabilities: dmTablePreset.capabilities
     });
 
     await this.ensureStarterCharacterFromLegacySnapshot(sessionId);
@@ -776,6 +779,84 @@ export class SurrealStore {
       tableCharacters: tableCharacters.map(mapTableCharacterMembership), characters,
       changeRequests: changeRequests.map(mapCharacterChangeRequest).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     };
+  }
+
+  async getCampaignTable(tableId: string): Promise<CampaignTable | null> {
+    await this.connect();
+    const record = await this.db.select<CampaignTableRecord>(new RecordId("campaign_table", tableId));
+    return record ? mapCampaignTable(record) : null;
+  }
+
+  async getCampaignMembership(campaignId: string, memberKey: string): Promise<CampaignMembership | null> {
+    await this.connect();
+    const [records] = await this.db.query<[CampaignMembershipRecord[]]>(
+      "SELECT * FROM campaign_membership WHERE campaign_id = $campaignId AND member_key = $memberKey LIMIT 1",
+      { campaignId, memberKey }
+    );
+    return records?.[0] ? mapCampaignMembership(records[0]) : null;
+  }
+
+  async getTableMembership(tableId: string, memberKey: string): Promise<TableMembership | null> {
+    await this.connect();
+    const [records] = await this.db.query<[TableMembershipRecord[]]>(
+      "SELECT * FROM table_membership WHERE table_id = $tableId AND member_key = $memberKey LIMIT 1",
+      { tableId, memberKey }
+    );
+    return records?.[0] ? mapTableMembership(records[0]) : null;
+  }
+
+  async upsertCampaignMembership(input: {
+    campaignId: string; memberKey: string; displayName: unknown; roleLabels: unknown; capabilities: unknown; scopes: unknown;
+  }): Promise<CampaignMembership> {
+    await this.connect();
+    const campaign = await this.db.select<CampaignRecord>(new RecordId("campaign", input.campaignId));
+    if (!campaign) throw new Error("campaign not found");
+    const displayName = normalizeMemberDisplayName(input.displayName);
+    const roleLabels = normalizeCampaignRoleLabels(input.roleLabels);
+    const capabilities = normalizeCampaignCapabilities(input.capabilities);
+    const scopes = normalizeCapabilityScopes(input.scopes);
+    const existing = await this.getCampaignMembership(input.campaignId, input.memberKey);
+    const id = existing?.id ?? randomUUID();
+    const record = await this.db.upsert<CampaignMembershipRecord>(new RecordId("campaign_membership", id)).content({
+      membership_id: id, campaign_id: input.campaignId, member_key: input.memberKey, display_name: displayName,
+      role_labels: roleLabels, capabilities, scopes_json: JSON.stringify(scopes)
+    });
+    return mapCampaignMembership(record);
+  }
+
+  async upsertTableMembership(input: {
+    tableId: string; memberKey: string; displayName: unknown; roleLabels: unknown; capabilities: unknown;
+  }): Promise<TableMembership> {
+    await this.connect();
+    const table = await this.db.select<CampaignTableRecord>(new RecordId("campaign_table", input.tableId));
+    if (!table) throw new Error("table not found");
+    const displayName = normalizeMemberDisplayName(input.displayName);
+    const roleLabels = normalizeTableRoleLabels(input.roleLabels);
+    const capabilities = normalizeTableCapabilities(input.capabilities);
+    const existing = await this.getTableMembership(input.tableId, input.memberKey);
+    const id = existing?.id ?? randomUUID();
+    const record = await this.db.upsert<TableMembershipRecord>(new RecordId("table_membership", id)).content({
+      membership_id: id, table_id: input.tableId, member_key: input.memberKey, display_name: displayName,
+      role_labels: roleLabels, capabilities
+    });
+    return mapTableMembership(record);
+  }
+
+  async deleteTableMembership(tableId: string, memberKey: string): Promise<void> {
+    await this.connect();
+    const membership = await this.getTableMembership(tableId, memberKey);
+    if (membership) await this.db.delete(new RecordId("table_membership", membership.id));
+  }
+
+  async deleteCampaignMembership(campaignId: string, memberKey: string): Promise<void> {
+    await this.connect();
+    const membership = await this.getCampaignMembership(campaignId, memberKey);
+    if (!membership) return;
+    const [tables] = await this.db.query<[CampaignTableRecord[]]>(
+      "SELECT * FROM campaign_table WHERE campaign_id = $campaignId", { campaignId }
+    );
+    for (const table of tables ?? []) await this.deleteTableMembership(table.table_id, memberKey);
+    await this.db.delete(new RecordId("campaign_membership", membership.id));
   }
 
   private async createCharacterInTransaction(
@@ -1008,6 +1089,12 @@ export class SurrealStore {
       base_updated_at: runtime.definition.updatedAt, created_at: now
     });
     return mapCharacterChangeRequest(record);
+  }
+
+  async getCharacterChangeRequest(requestId: string): Promise<CharacterChangeRequest | null> {
+    await this.connect();
+    const record = await this.db.select<CharacterChangeRequestRecord>(new RecordId("character_change_request", requestId));
+    return record ? mapCharacterChangeRequest(record) : null;
   }
 
   async resolveCharacterChangeRequest(input: { requestId: string; decision: "approve" | "reject"; resolvedBy: string }): Promise<CharacterChangeRequest> {
