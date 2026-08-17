@@ -1,0 +1,38 @@
+name: VS009 exact-tree bootstrap
+
+on:
+  push:
+    branches:
+      - mvp/permissions-scopes-vs009
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified VS009 tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "a795eef14d0695ef0dbe9d99eb47ea2e076b917025854d469f27ce7a7506eaf5  .github/bootstrap/vs009.patch.xz" | sha256sum -c -
+          xz -dc .github/bootstrap/vs009.patch.xz > /tmp/vs009.patch
+          git apply --index /tmp/vs009.patch
+          rm -f .github/bootstrap/vs009.patch.xz .github/workflows/vs009-bootstrap.yml
+          rmdir .github/bootstrap 2>/dev/null || true
+          git add -A
+          actual_tree="$(git write-tree)"
+          test "$actual_tree" = "88b765533bbaa925f931862c39aab8bc9bfab9d1"
+          corepack enable
+          corepack prepare pnpm@10.15.1 --activate
+          pnpm install --frozen-lockfile
+          pnpm check
+          test "$(git write-tree)" = "88b765533bbaa925f931862c39aab8bc9bfab9d1"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "VS009 — Permissions and Co-DM scopes"
+          git push origin HEAD:mvp/permissions-scopes-vs009
