@@ -122,10 +122,16 @@ function endpoint(): string {
   return `${window.location.origin}/game`;
 }
 
+const HEARTBEAT_INTERVAL_MS = 2000;
+const HEARTBEAT_TIMEOUT_MS = 6000;
+
+type LiveCommandType = (typeof MESSAGE)[Exclude<keyof typeof MESSAGE, "heartbeat">];
+
 export function useLiveRoom() {
   const [state, setState] = useState<LiveViewState | null>(null);
   const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
-  const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [commandError, setCommandError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const roomRef = useRef<Room<LiveRoomState> | null>(null);
   const clientName = useMemo(getClientName, []);
@@ -133,31 +139,99 @@ export function useLiveRoom() {
   useEffect(() => {
     let cancelled = false;
     let joinedRoom: Room<LiveRoomState> | null = null;
+    let heartbeatTimer: number | null = null;
+    let removeRuntimeListeners: (() => void) | null = null;
+    let heartbeatAckAt = Date.now();
+    setState(null);
     setStatus("connecting");
-    setError(null);
+    setConnectionError(null);
+    setCommandError(null);
+
+    const stopLivenessTracking = () => {
+      if (heartbeatTimer !== null) {
+        window.clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      removeRuntimeListeners?.();
+      removeRuntimeListeners = null;
+    };
+
+    const markDisconnected = (message: string, room: Room<LiveRoomState>) => {
+      if (cancelled || roomRef.current !== room) return;
+      roomRef.current = null;
+      stopLivenessTracking();
+      setState(null);
+      setStatus("disconnected");
+      setConnectionError(message);
+      setCommandError(null);
+    };
 
     const connect = async () => {
       try {
         const client = new Client(endpoint());
         const room = await client.joinOrCreate(ROOM_NAME, { clientName }, LiveRoomState);
         if (cancelled) {
-          await room.leave();
+          await room.leave(false);
           return;
         }
+        room.reconnection.enabled = false;
         joinedRoom = room;
         roomRef.current = room;
+        heartbeatAckAt = Date.now();
         setState(snapshot(room.state));
         setStatus("connected");
-        room.onStateChange((next) => setState(snapshot(next)));
-        room.onMessage(SERVER_MESSAGE.commandError, (message: CommandErrorMessage) => setError(message.message));
-        room.onLeave(() => {
-          if (!cancelled) setStatus("disconnected");
+        setConnectionError(null);
+
+        const sendHeartbeat = (resetDeadline = false) => {
+          if (cancelled || roomRef.current !== room || document.visibilityState === "hidden") return;
+          if (!room.connection.isOpen) {
+            markDisconnected("Live session disconnected. Retry to rejoin.", room);
+            return;
+          }
+          const now = Date.now();
+          if (resetDeadline) heartbeatAckAt = now;
+          if (!resetDeadline && now - heartbeatAckAt >= HEARTBEAT_TIMEOUT_MS) {
+            markDisconnected("Live session stopped responding. Retry to rejoin.", room);
+            void room.leave(false);
+            return;
+          }
+          room.send(MESSAGE.heartbeat, { nonce: `${now.toString(36)}-${randomClientSuffix()}` });
+        };
+        const onVisibilityChange = () => {
+          if (document.visibilityState === "visible") sendHeartbeat(true);
+        };
+        const onOffline = () => {
+          markDisconnected("Network connection is offline. Retry when connectivity returns.", room);
+          void room.leave(false);
+        };
+
+        room.onStateChange((next) => {
+          if (!cancelled && roomRef.current === room) setState(snapshot(next));
         });
-        room.onError((_code, message) => setError(message ?? "Room connection error"));
+        room.onMessage(SERVER_MESSAGE.commandError, (message: CommandErrorMessage) => {
+          if (!cancelled && roomRef.current === room) setCommandError(message.message);
+        });
+        room.onMessage(SERVER_MESSAGE.heartbeat, () => {
+          if (!cancelled && roomRef.current === room) heartbeatAckAt = Date.now();
+        });
+        room.onLeave(() => markDisconnected("Live session disconnected. Retry to rejoin.", room));
+        room.onError((_code, message) => {
+          if (!cancelled && roomRef.current === room) setConnectionError(message ?? "Room connection error");
+        });
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        window.addEventListener("offline", onOffline);
+        removeRuntimeListeners = () => {
+          document.removeEventListener("visibilitychange", onVisibilityChange);
+          window.removeEventListener("offline", onOffline);
+        };
+        heartbeatTimer = window.setInterval(() => sendHeartbeat(false), HEARTBEAT_INTERVAL_MS);
+        sendHeartbeat(true);
       } catch (reason) {
         if (!cancelled) {
+          roomRef.current = null;
+          setState(null);
           setStatus("disconnected");
-          setError(reason instanceof Error ? reason.message : "Unable to join live room");
+          setConnectionError(reason instanceof Error ? reason.message : "Unable to join live room");
         }
       }
     };
@@ -166,71 +240,77 @@ export function useLiveRoom() {
     return () => {
       cancelled = true;
       roomRef.current = null;
-      if (joinedRoom) void joinedRoom.leave();
+      stopLivenessTracking();
+      if (joinedRoom?.connection.isOpen) void joinedRoom.leave(false);
     };
   }, [attempt, clientName]);
 
-  const roll = useCallback((sides: number, modifier: number) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.roll, { sides, modifier });
+  const sendCommand = useCallback((type: LiveCommandType, payload: object) => {
+    const room = roomRef.current;
+    if (!room || !room.connection.isOpen) {
+      setCommandError("Live session is unavailable. Retry the campaign connection.");
+      return;
+    }
+    setCommandError(null);
+    try {
+      room.send(type, payload);
+    } catch (reason) {
+      setCommandError(reason instanceof Error ? reason.message : "Unable to send live command");
+    }
   }, []);
+
+  const roll = useCallback((sides: number, modifier: number) => {
+    sendCommand(MESSAGE.roll, { sides, modifier });
+  }, [sendCommand]);
 
   const presentScene = useCallback((sceneId: string) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.presentScene, { sceneId });
-  }, []);
+    sendCommand(MESSAGE.presentScene, { sceneId });
+  }, [sendCommand]);
 
   const adjustHp = useCallback((characterId: string, delta: number) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.adjustHp, { characterId, delta });
-  }, []);
+    sendCommand(MESSAGE.adjustHp, { characterId, delta });
+  }, [sendCommand]);
 
   const createToken = useCallback((command: {
     sceneId: string; kind: "player" | "npc" | "object"; label: string; x: number; y: number; claim?: boolean;
   }) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.createToken, command);
-  }, []);
+    sendCommand(MESSAGE.createToken, command);
+  }, [sendCommand]);
 
   const moveToken = useCallback((tokenId: string, x: number, y: number) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.moveToken, { tokenId, x, y });
-  }, []);
+    sendCommand(MESSAGE.moveToken, { tokenId, x, y });
+  }, [sendCommand]);
 
   const setFogEnabled = useCallback((sceneId: string, enabled: boolean) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.setFogEnabled, { sceneId, enabled });
-  }, []);
+    sendCommand(MESSAGE.setFogEnabled, { sceneId, enabled });
+  }, [sendCommand]);
 
   const setFogCell = useCallback((sceneId: string, column: number, row: number, revealed: boolean) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.setFogCell, { sceneId, column, row, revealed });
-  }, []);
+    sendCommand(MESSAGE.setFogCell, { sceneId, column, row, revealed });
+  }, [sendCommand]);
 
   const rollInitiative = useCallback((command: { characterId?: string; label?: string; modifier?: number; armorClass?: number; maxHp?: number }) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.rollInitiative, command);
-  }, []);
+    sendCommand(MESSAGE.rollInitiative, command);
+  }, [sendCommand]);
 
   const advanceInitiative = useCallback(() => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.advanceInitiative, {});
-  }, []);
+    sendCommand(MESSAGE.advanceInitiative, {});
+  }, [sendCommand]);
 
   const clearInitiative = useCallback(() => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.clearInitiative, {});
-  }, []);
+    sendCommand(MESSAGE.clearInitiative, {});
+  }, [sendCommand]);
 
   const performBasicAttack = useCallback((command: { attackerCharacterId: string; attackId: string; targetEntryId: string }) => {
-    setError(null);
-    roomRef.current?.send(MESSAGE.performBasicAttack, command);
-  }, []);
+    sendCommand(MESSAGE.performBasicAttack, command);
+  }, [sendCommand]);
 
   return {
     state,
     status,
-    error,
+    error: connectionError ?? commandError,
+    connectionError,
+    commandError,
     clientName,
     roll,
     adjustHp,
@@ -243,6 +323,7 @@ export function useLiveRoom() {
     advanceInitiative,
     clearInitiative,
     performBasicAttack,
+    dismissCommandError: () => setCommandError(null),
     reconnect: () => setAttempt((value) => value + 1)
   };
 }

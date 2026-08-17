@@ -52,6 +52,14 @@ From a QA container attached to `utt-next_default`, use `UTT_ENDPOINT=http://web
 
 The smoke test joins two clients, executes authoritative mutations and records HP/roll/active-scene recovery evidence in ignored `.runtime/` output. Restart only `game-server`, then rerun with `SMOKE_MODE=verify-recovery`.
 
+## Live liveness / Retry QA
+
+VS010 treats the application heartbeat as transport metadata, not session history. For a manual frozen-room check, keep Play open, pause only `game-server`, and verify the UI leaves synchronized campaign state within the heartbeat deadline and offers `Retry campaign`. Unpause the server before retrying.
+
+Do not use this procedure while another developer is intentionally mutating the preview. After the check, confirm both health endpoints, verify Companion did not auto-switch from Offline back to Campaign, and verify the session event sequence did not advance merely because of heartbeat/retry traffic.
+
+A normal `docker compose stop game-server` includes graceful-shutdown time and is therefore not a precise heartbeat measurement. A frozen process/open socket is the relevant liveness case.
+
 ## Token authority smoke
 
 `pnpm exec tsx scripts/token-smoke.ts` proves two-client token creation/movement, rejection of a non-owner move, durable coordinates and restart recovery. In a Compose-network QA container set `UTT_ENDPOINT=http://web:8080/game`; rerun with `SMOKE_MODE=verify-recovery` after restarting only `game-server`.

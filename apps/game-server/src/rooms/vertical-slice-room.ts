@@ -17,6 +17,7 @@ import {
   SESSION_ID,
   type AdjustHpCommand,
   type CreateTokenCommand,
+  type HeartbeatCommand,
   type JoinOptions,
   type MoveTokenCommand,
   type PresentSceneCommand,
@@ -142,6 +143,10 @@ export class VerticalSliceRoom extends Room {
     });
     this.onMessage(MESSAGE.setFogCell, (client, message: SetFogCellCommand) => {
       this.enqueue(client, () => this.handleSetFogCell(client, message));
+    });
+    this.onMessage(MESSAGE.heartbeat, (client, message: HeartbeatCommand) => {
+      if (typeof message?.nonce !== "string" || !message.nonce || message.nonce.length > 64) return;
+      client.send(SERVER_MESSAGE.heartbeat, { nonce: message.nonce });
     });
   }
 

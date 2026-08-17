@@ -1,6 +1,6 @@
 # Product flow direction
 
-Status: **accepted direction; VS009 permissions/scopes implemented**
+Status: **accepted direction; VS010 live reliability implemented**
 
 This document records the navigation and ownership model agreed after the first branded landing page. It is intentionally broader than the current implementation. Current runtime behavior remains documented in `ARCHITECTURE.md` and the vertical-slice documents.
 
@@ -159,6 +159,12 @@ Campaign/Table/membership boundaries, Home/Campaign/Table/Characters surfaces, s
 
 CharacterIdentity, independent campaign imports/forks, Table membership by reference, structural change requests with stale-write protection, direct DM overrides, an explicit DM-private data boundary, and Table-filtered live character projection are implemented. Auth is still deferred, so governance affordances are not yet security enforcement.
 
-**VS009 — Permissions & Co-DM Scopes** should deepen capability/scoped authorization semantics before auth/security enforcement is claimed.
+**VS009 — Permissions & Co-DM Scopes — implemented**
 
-Reliability/session polish should follow these flow slices so engineering hardens the intended product flow rather than a temporary navigation model.
+Explicit Campaign/world and Table/session capabilities, world subgraph scopes, collaborator management, Policy Preview and centralized transport enforcement are implemented before authenticated principal resolution.
+
+**VS010 — Live Reliability & Recovery — implemented**
+
+Application heartbeat, stale live-state invalidation, explicit Retry ownership, visible command-rejection UX and Offline Companion stickiness harden the intended Table -> Play flow without adding background synchronization or auth.
+
+The next gameplay/product slice should now be chosen from actual playtest friction rather than extending temporary navigation or reliability scaffolding by default.

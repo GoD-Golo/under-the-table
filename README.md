@@ -119,7 +119,16 @@ The product goal is one continuous tool for world building, lore, scene navigati
 - `session.join` is checked before room presence;
 - authentication is still deferred, so all actual preview traffic resolves to the system-managed local Owner principal.
 
-Full content/choice resolution (background feats, species/class features, inventory/equipment, Weapon Mastery and spells), the general targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, auth/roles and secure visibility/secret-lore authorization remain separate milestones.
+**Vertical Slice 010** hardens live reliability and recovery:
+
+- visible Play/Director clients use a non-persistent application heartbeat to detect frozen live rooms;
+- stale synchronized campaign state is cleared on heartbeat timeout, transport leave or browser offline;
+- Colyseus automatic reconnect is disabled so UTT has one explicit Retry policy;
+- Offline Companion remains selected after campaign recovery until the user chooses Campaign again;
+- connection failures and command rejections have separate, visible UX;
+- heartbeat/rejected-command traffic does not create gameplay events or persistence writes.
+
+Full content/choice resolution (background feats, species/class features, inventory/equipment, Weapon Mastery and spells), the general targeting/Action/Effect engines, walls/dynamic vision, travel rules, hex-map generation, authenticated principal resolution and secure visibility/secret-lore authorization remain separate milestones.
 
 ## Development architecture
 
@@ -147,6 +156,7 @@ Only the gateway is published to the homelab Tailscale address. SurrealDB, Colys
 - `docs/VERTICAL-SLICE-007.md` — Product Home, Campaign/Table context and navigation evidence
 - `docs/VERTICAL-SLICE-008.md` — CharacterIdentity, campaign versions, Table references and governance evidence
 - `docs/VERTICAL-SLICE-009.md` — capability policy, Co-DM scopes, collaborators and enforcement evidence
+- `docs/VERTICAL-SLICE-010.md` — live-room heartbeat, stale-state invalidation, explicit Retry and error UX evidence
 - `docs/BRAND-AND-LANDING.md` — product identity, landing composition and visual-language boundaries
 - `docs/LEGACY-REVIEW.md` — what v0.0.4 may and may not influence
 - `docs/adr/` — architecture decision records
