@@ -6,3 +6,4 @@ export * from "./health.js";
 export * from "./session.js";
 export * from "./scene.js";
 export * from "./token.js";
+export * from "./permissions.js";

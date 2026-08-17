@@ -1,8 +1,16 @@
+export type ProductCampaignCapability =
+  | "campaign.members.manage" | "world.read" | "world.scene.edit" | "world.lore.edit" | "world.npc.manage"
+  | "character.propose" | "character.review" | "character.edit" | "character.private";
+export type ProductTableCapability = "session.join" | "session.run" | "session.present" | "table.manage" | "character.play";
+export interface ProductCapabilityScopeDto { kind: "campaign" | "world_subgraph"; worldEntityId: string | null; includeDescendants: boolean }
+
 export interface ProductCampaignDto {
   id: string;
   name: string;
   summary: string;
   roleLabels: Array<"owner" | "dm" | "co_dm" | "player">;
+  capabilities: ProductCampaignCapability[];
+  scopes: ProductCapabilityScopeDto[];
   tableCount: number;
   characterCount: number;
 }
@@ -14,10 +22,22 @@ export interface ProductTableDto {
   summary: string;
   currentSessionId: string | null;
   roleLabels: Array<"dm" | "co_dm" | "player">;
+  capabilities: ProductTableCapability[];
   characterIds: string[];
   activeSceneId: string | null;
   activeSceneName: string | null;
 }
+
+export interface ProductCampaignMembershipDto {
+  id: string; campaignId: string; memberKey: string; displayName: string;
+  roleLabels: ("owner" | "dm" | "co_dm" | "player")[];
+  capabilities: ProductCampaignCapability[]; scopes: ProductCapabilityScopeDto[]; systemManaged: boolean;
+}
+export interface ProductTableMembershipDto {
+  id: string; tableId: string; memberKey: string; displayName: string;
+  roleLabels: ("dm" | "co_dm" | "player")[]; capabilities: ProductTableCapability[]; systemManaged: boolean;
+}
+export interface ProductWorldEntitySummaryDto { id: string; name: string; kind: string }
 
 export interface ProductCharacterIdentityDto {
   id: string;
@@ -74,6 +94,9 @@ export interface ProductSnapshotDto {
   };
   campaigns: ProductCampaignDto[];
   tables: ProductTableDto[];
+  campaignMemberships: ProductCampaignMembershipDto[];
+  tableMemberships: ProductTableMembershipDto[];
+  worldEntities: ProductWorldEntitySummaryDto[];
   identities: ProductCharacterIdentityDto[];
   characters: ProductCharacterDto[];
   changeRequests: ProductCharacterChangeRequestDto[];

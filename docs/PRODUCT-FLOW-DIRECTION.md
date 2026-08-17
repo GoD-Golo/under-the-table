@@ -1,6 +1,6 @@
 # Product flow direction
 
-Status: **accepted direction; VS008 character lifecycle implemented**
+Status: **accepted direction; VS009 permissions/scopes implemented**
 
 This document records the navigation and ownership model agreed after the first branded landing page. It is intentionally broader than the current implementation. Current runtime behavior remains documented in `ARCHITECTURE.md` and the vertical-slice documents.
 

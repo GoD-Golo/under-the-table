@@ -4,6 +4,7 @@ import type { ProductCampaignDto, ProductCharacterDto, ProductSnapshotDto, Produ
 import { useProductSnapshot } from "../product.js";
 import { BrandLogo } from "./BrandLogo.js";
 import { CharacterLifecycleHome } from "./CharacterLifecycleHome.js";
+import { CampaignAccessPanel } from "./CampaignAccessPanel.js";
 
 export type ProductScreen = "home" | "campaigns" | "characters" | "campaign" | "table";
 
@@ -125,26 +126,30 @@ function CampaignsPage({ data, onCampaign }: { data: ProductSnapshotDto; onCampa
   </>;
 }
 
-function CampaignHomePage({ data, campaign, onTable, onCharacters, onWorld }: {
+function CampaignHomePage({ data, campaign, onTable, onCharacters, onWorld, onRefresh }: {
   data: ProductSnapshotDto;
   campaign: ProductCampaignDto;
   onTable: (id: string) => void;
   onCharacters: () => void;
   onWorld: (campaignId: string, tableId?: string) => void;
+  onRefresh: () => Promise<void>;
 }) {
   const tables = data.tables.filter((item) => item.campaignId === campaign.id);
   const characters = data.characters.filter((item) => item.campaignId === campaign.id);
   const primaryTable = tables.find((item) => item.currentSessionId) ?? tables[0] ?? null;
+  const canReadFullWorld = campaign.capabilities.includes("world.read") && campaign.scopes.some((scope) => scope.kind === "campaign");
+  const canOpenDirector = canReadFullWorld && ["world.scene.edit", "world.lore.edit", "world.npc.manage"].some((capability) => campaign.capabilities.includes(capability as "world.scene.edit" | "world.lore.edit" | "world.npc.manage"));
   return <>
     <section className="campaign-hero"><div><span className="product-kicker">Campaign</span><h1>{campaign.name}</h1><p>{campaign.summary}</p><RoleBadges roles={campaign.roleLabels} /></div>{primaryTable ? <button className="product-primary" type="button" onClick={() => onTable(primaryTable.id)}>Continue <span>→</span></button> : null}</section>
     <div className="campaign-home-grid">
       <section className="product-section campaign-tables"><header><div><span className="product-kicker">Tables</span><h2>Play groups</h2></div></header><div className="table-list">{tables.map((table) => <button key={table.id} type="button" onClick={() => onTable(table.id)}><div><strong>{table.name}</strong><span>{table.activeSceneName ?? "No active scene"}</span></div><RoleBadges roles={table.roleLabels} /><small>{table.characterIds.length} character{table.characterIds.length === 1 ? "" : "s"}</small><b>→</b></button>)}</div></section>
-      <section className="campaign-world-card"><span className="product-kicker">Shared world</span><h2>World & Director</h2><p>Scenes, lore and the World Graph belong to the campaign. Prepare privately, then present to a table.</p><button className="product-secondary" type="button" onClick={() => onWorld(campaign.id, primaryTable?.id)}>Open world</button></section>
+      <section className="campaign-world-card"><span className="product-kicker">Shared world</span><h2>World & Director</h2><p>Scenes, lore and the World Graph belong to the campaign. Prepare privately, then present to a table.</p>{canOpenDirector ? <button className="product-secondary" type="button" onClick={() => onWorld(campaign.id, primaryTable?.id)}>Open world</button> : <small className="capability-note">Full Atlas access requires campaign-wide world.read. Scoped world projections come later with explicit containment.</small>}</section>
     </div>
     <section className="product-home-split campaign-lower">
       <div className="product-section compact"><header><div><span className="product-kicker">Characters</span><h2>Campaign roster</h2></div><button type="button" onClick={onCharacters}>Characters Home</button></header><div className="character-home-list">{characters.map((character) => <article key={character.id}><div className="character-avatar">{character.name.slice(0,1)}</div><div><strong>{character.name}</strong><CharacterMeta character={character} /></div></article>)}</div></div>
       <div className="product-section compact"><header><div><span className="product-kicker">Activity</span><h2>Recent changes</h2></div></header><div className="product-activity">{data.activity.filter((event) => tables.some((table) => table.id === event.tableId)).slice(0, 6).map((event) => <article key={`${event.tableId}:${event.sequence}`}><span>#{event.sequence}</span><p>{event.summary}</p></article>)}</div></div>
     </section>
+    <CampaignAccessPanel data={data} campaign={campaign} onRefresh={onRefresh} />
   </>;
 }
 
@@ -160,7 +165,10 @@ function TableHomePage({ data, table, campaign, onCampaign, onWorld, onPlay }: {
   const storedCharacter = window.localStorage.getItem("utt.play.character.v1");
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(() => characters.some((item) => item.id === storedCharacter) ? storedCharacter : characters[0]?.id ?? null);
   const selected = characters.find((item) => item.id === selectedCharacterId) ?? characters[0] ?? null;
-  const canPrepare = table.roleLabels.includes("dm") || table.roleLabels.includes("co_dm");
+  const canJoin = table.capabilities.includes("session.join");
+  const canPlay = table.capabilities.includes("character.play");
+  const canReadFullWorld = campaign.capabilities.includes("world.read") && campaign.scopes.some((scope) => scope.kind === "campaign");
+  const canPrepare = canReadFullWorld && (table.capabilities.includes("session.run") || table.capabilities.includes("session.present"));
   const selectCharacter = (id: string) => { setSelectedCharacterId(id); window.localStorage.setItem("utt.play.character.v1", id); };
 
   return <>
@@ -172,7 +180,7 @@ function TableHomePage({ data, table, campaign, onCampaign, onWorld, onPlay }: {
 
     <section className="table-entry-grid">
       <div className="table-character-choice"><span className="product-kicker">Who are you playing?</span><h2>{selected?.name ?? "Choose a character"}</h2><div className="table-character-list">{characters.map((character) => <button className={character.id === selected?.id ? "active" : ""} type="button" key={character.id} onClick={() => selectCharacter(character.id)}><div className="character-avatar">{character.name.slice(0,1)}</div><div><strong>{character.name}</strong><CharacterMeta character={character} /></div><span className="choice-check">{character.id === selected?.id ? "✓" : ""}</span></button>)}</div></div>
-      <div className="table-play-choice"><span className="product-kicker">How are you playing?</span><button className="play-choice primary" type="button" disabled={!table.currentSessionId} onClick={() => onPlay(table.id, "table", selected?.id ?? null)}><span className="play-choice-icon">▱</span><div><strong>Virtual Table</strong><small>Map-first · tokens · HUD</small></div><b>→</b></button><button className="play-choice" type="button" onClick={() => onPlay(table.id, "companion", selected?.id ?? null)}><span className="play-choice-icon">▯</span><div><strong>Physical Companion</strong><small>Character · checks · actions</small></div><b>→</b></button>{canPrepare ? <button className="prepare-choice" type="button" onClick={() => onWorld(campaign.id, table.id)}><span>DM / Co-DM</span><strong>Prepare this table</strong><small>Open Director without changing what players see.</small></button> : null}</div>
+      <div className="table-play-choice"><span className="product-kicker">How are you playing?</span><button className="play-choice primary" type="button" disabled={!table.currentSessionId || !canJoin || (!canPlay && Boolean(selected))} onClick={() => onPlay(table.id, "table", selected?.id ?? null)}><span className="play-choice-icon">▱</span><div><strong>Virtual Table</strong><small>Map-first · tokens · HUD</small></div><b>→</b></button><button className="play-choice" type="button" disabled={!canJoin || (!canPlay && Boolean(selected))} onClick={() => onPlay(table.id, "companion", selected?.id ?? null)}><span className="play-choice-icon">▯</span><div><strong>Physical Companion</strong><small>Character · checks · actions</small></div><b>→</b></button>{canPrepare ? <button className="prepare-choice" type="button" onClick={() => onWorld(campaign.id, table.id)}><span>DM / Co-DM</span><strong>Prepare this table</strong><small>Open Director without changing what players see.</small></button> : null}</div>
     </section>
   </>;
 }
@@ -188,7 +196,7 @@ export function ProductExperience(props: ProductExperienceProps) {
   else if (props.screen === "home") content = <HomePage data={product.data} onCampaign={props.onCampaign} onCampaigns={props.onCampaigns} onCharacters={props.onCharacters} onTable={props.onTable} onPlay={props.onPlay} />;
   else if (props.screen === "campaigns") content = <CampaignsPage data={product.data} onCampaign={props.onCampaign} />;
   else if (props.screen === "characters") content = <CharacterLifecycleHome data={product.data} onTable={props.onTable} onRefresh={product.refresh} />;
-  else if (props.screen === "campaign" && campaign) content = <CampaignHomePage data={product.data} campaign={campaign} onTable={props.onTable} onCharacters={props.onCharacters} onWorld={props.onWorld} />;
+  else if (props.screen === "campaign" && campaign) content = <CampaignHomePage data={product.data} campaign={campaign} onTable={props.onTable} onCharacters={props.onCharacters} onWorld={props.onWorld} onRefresh={product.refresh} />;
   else if (props.screen === "table" && table) {
     const parent = product.data.campaigns.find((item) => item.id === table.campaignId) ?? null;
     content = parent ? <TableHomePage data={product.data} table={table} campaign={parent} onCampaign={props.onCampaign} onWorld={props.onWorld} onPlay={props.onPlay} /> : <EmptyState title="Campaign unavailable." copy="This table has no visible campaign context." />;

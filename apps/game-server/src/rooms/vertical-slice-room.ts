@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { Room, type Client } from "@colyseus/core";
 import {
-  STARTER_TABLE_ID, normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
+  PREVIEW_MEMBER_KEY, STARTER_TABLE_ID, normalizeTokenCoordinate, normalizeTokenKind, normalizeTokenLabel,
   type CharacterRuntime, type GameEvent, type InitiativeState, type RecentEvent, type SceneToken, type SessionSnapshot
 } from "@utt/domain";
 import { DND2024_RULESET_ID, abilityModifier, attackModifier, normalizeDnd2024Data } from "@utt/rules-dnd2024";
@@ -27,6 +27,7 @@ import {
   type SetFogEnabledCommand
 } from "@utt/protocol";
 import { surrealStore } from "../persistence/surreal-store.js";
+import { requireTableCapability } from "../policy.js";
 import { createBasicAttackEvent, createHpEvent, createInitiativeAdvancedEvent, createInitiativeClearedEvent, createInitiativeRollEvent, createRollEvent, createScenePresentedEvent, createTokenCreatedEvent, createTokenMovedEvent, resolveBasicAttack } from "../session-logic.js";
 
 const RECENT_EVENT_LIMIT = 12;
@@ -144,6 +145,11 @@ export class VerticalSliceRoom extends Room {
     });
   }
 
+  async onAuth(): Promise<boolean> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "session.join");
+    return true;
+  }
+
   onJoin(client: Client, options: JoinOptions): void {
     const fallback = `Player-${client.sessionId.slice(0, 4)}`;
     this.names.set(client.sessionId, safeClientName(options?.clientName, fallback));
@@ -210,6 +216,8 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleRollInitiative(client: Client, command: RollInitiativeCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY,
+      typeof command?.characterId === "string" && command.characterId ? "character.play" : "session.run");
     let characterId: string | null = null;
     let label = typeof command?.label === "string" ? command.label.trim().replace(/\s+/g, " ").slice(0, 80) : "";
     let modifier = 0;
@@ -266,6 +274,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handlePerformBasicAttack(client: Client, command: PerformBasicAttackCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "character.play");
     if (typeof command?.attackerCharacterId !== "string" || !command.attackerCharacterId) throw new Error("attackerCharacterId is required");
     if (typeof command?.attackId !== "string" || !command.attackId) throw new Error("attackId is required");
     if (typeof command?.targetEntryId !== "string" || !command.targetEntryId) throw new Error("targetEntryId is required");
@@ -329,6 +338,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleAdvanceInitiative(client: Client): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "session.run");
     const current = this.currentInitiative();
     if (!current.entries.length) throw new Error("initiative is empty");
     let activeIndex = current.activeIndex < 0 ? 0 : current.activeIndex + 1;
@@ -345,6 +355,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleClearInitiative(client: Client): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "session.run");
     const initiative: InitiativeState = { round: 0, activeIndex: -1, entries: [] };
     const event = createInitiativeClearedEvent({
       sessionId: SESSION_ID, sequence: this.state.eventSequence + 1, actor: this.actorFor(client), at: new Date().toISOString()
@@ -357,6 +368,7 @@ export class VerticalSliceRoom extends Room {
   private async handleCreateToken(client: Client, command: CreateTokenCommand): Promise<void> {
     if (typeof command?.sceneId !== "string" || !command.sceneId) throw new Error("sceneId is required");
     const kind = normalizeTokenKind(command.kind);
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, kind === "player" ? "character.play" : "session.run");
     const label = normalizeTokenLabel(command.label);
     const x = normalizeTokenCoordinate(command.x);
     const y = normalizeTokenCoordinate(command.y);
@@ -379,6 +391,7 @@ export class VerticalSliceRoom extends Room {
     if (typeof command?.tokenId !== "string" || !command.tokenId) throw new Error("tokenId is required");
     const token = await surrealStore.getToken(command.tokenId);
     if (!token) throw new Error("token not found");
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, token.kind === "player" ? "character.play" : "session.run");
     const actor = this.actorFor(client);
     if (token.controllerName && token.controllerName !== actor) throw new Error(`token is controlled by ${token.controllerName}`);
     const x = normalizeTokenCoordinate(command.x);
@@ -395,6 +408,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleSetFogEnabled(_client: Client, command: SetFogEnabledCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "session.run");
     if (typeof command?.sceneId !== "string" || command.sceneId !== this.state.activeSceneId) throw new Error("fog can only be edited on the active scene");
     if (typeof command.enabled !== "boolean") throw new Error("fog enabled must be boolean");
     const fog = await surrealStore.setSceneFogEnabled(command.sceneId, command.enabled);
@@ -402,6 +416,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleSetFogCell(_client: Client, command: SetFogCellCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "session.run");
     if (typeof command?.sceneId !== "string" || command.sceneId !== this.state.activeSceneId) throw new Error("fog can only be edited on the active scene");
     if (typeof command.revealed !== "boolean") throw new Error("fog revealed must be boolean");
     const fog = await surrealStore.setSceneFogCell(command.sceneId, command.column, command.row, command.revealed);
@@ -409,6 +424,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleRoll(client: Client, command: RollCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "character.play");
     const sequence = this.state.eventSequence + 1;
     const { event, roll } = createRollEvent({
       sessionId: SESSION_ID,
@@ -435,6 +451,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handlePresentScene(client: Client, command: PresentSceneCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "session.present");
     if (typeof command?.sceneId !== "string" || !command.sceneId) throw new Error("sceneId is required");
     const scene = await surrealStore.getScene(command.sceneId);
     if (!scene) throw new Error("scene not found");
@@ -456,6 +473,7 @@ export class VerticalSliceRoom extends Room {
   }
 
   private async handleHp(client: Client, command: AdjustHpCommand): Promise<void> {
+    await requireTableCapability(STARTER_TABLE_ID, PREVIEW_MEMBER_KEY, "character.play");
     if (typeof command?.characterId !== "string" || !command.characterId) throw new Error("characterId is required");
     const character = this.state.characters.get(command.characterId);
     if (!character) throw new Error("character not found");

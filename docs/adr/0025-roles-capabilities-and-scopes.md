@@ -25,3 +25,12 @@ Table permissions are independent from World Graph permissions.
 Until real authentication/authorization is implemented, these structures are domain and UX semantics only. They must not be described as a security boundary.
 
 Future authenticated projections must omit DM-private world/character data from unauthorized clients rather than merely hiding it in the UI.
+
+
+## VS009 implementation
+
+VS009 implements the capability/scope policy described here. Role labels are used only to create configuration presets; `evaluateCampaignAccess()` and `evaluateTableAccess()` use stored capabilities/scopes, never the role label itself.
+
+World subgraph evaluation supports explicit ancestry input, but production descendant traversal is intentionally deferred until the World Graph has canonical containment relationships. Full Atlas projection remains campaign-wide only.
+
+Authenticated principal resolution is still deferred; see ADR 0027.
